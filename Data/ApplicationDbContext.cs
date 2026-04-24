@@ -20,11 +20,29 @@ namespace BookStore.Data
                 .WithMany(c => c.Books)
                 .HasForeignKey(b => b.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.User)
+                .WithMany(u => u.Orders)
+                .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<OrderDetail>()
+                .HasOne(od => od.Order)
+                .WithMany(o => o.OrderDetails)
+                .HasForeignKey(od => od.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<OrderDetail>()
+                .HasOne(od => od.Book)
+                .WithMany(b => b.OrderDetails)
+                .HasForeignKey(od => od.BookId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
 
         public DbSet<Book> Books { get; set; }
         public DbSet<Category> Categories { get; set; }
-        //public DbSet<Order> Orders { get; set; }
-        //public DbSet<OrderDetail> OrderDetails { get; set; }
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderDetail> OrderDetails { get; set; }
     }
 }

@@ -32,5 +32,8 @@ namespace BookStore.Models
         
         // Many Books belong to one Category
         public Category? Category { get; set; }
+
+        // One Book can appear in many OrderDetails
+        public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
     }
 }
