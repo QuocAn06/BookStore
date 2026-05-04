@@ -361,3 +361,27 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# -----------------------------
+# BookStore project-specific
+# -----------------------------
+
+# IDE/editor local settings
+.vscode/
+.idea/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# ASP.NET Core user secrets / local cert artifacts
+secrets.json
+*.pfx
+*.p12
+
+# Logs and temp artifacts
+*.tmp
+*.temp
+*.bak
+*.orig
