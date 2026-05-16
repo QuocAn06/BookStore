@@ -1,0 +1,67 @@
+﻿@model BookStore.Models.ViewModels.BookDetailVM
+
+@{
+    ViewData["Title"] = "Book Detail";
+}
+
+<h1>Book Detail</h1>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="h5 mb-0">@Model.Book.Title</h2>
+    </div>
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">Title</dt>
+            <dd class="col-sm-9">@Model.Book.Title</dd>
+
+            <dt class="col-sm-3">Author</dt>
+            <dd class="col-sm-9">@Model.AuthorName</dd>
+
+            <dt class="col-sm-3">Category</dt>
+            <dd class="col-sm-9">@Model.CategoryName</dd>
+
+            <dt class="col-sm-3">Stock</dt>
+            <dd class="col-sm-9">@Model.Book.Stock</dd>
+
+            <dt class="col-sm-3">Image</dt>
+            <dd class="col-sm-9">
+                @if (!string.IsNullOrWhiteSpace(Model.Book.ImageUrl))
+                {
+                    <img src="@Model.Book.ImageUrl" alt="Cover" style="max-height: 200px;" />
+                }
+                else
+                {
+                    <span class="text-muted">No image</span>
+                }
+            </dd>
+        </dl>
+    </div>
+</div>
+
+@if (Model.RelatedBooksInCategory != null && Model.RelatedBooksInCategory.Any())
+{
+    <h3>Other books in the same category</h3>
+    <ul class="list-group mb-4">
+        @foreach (var related in Model.RelatedBooksInCategory)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>@related.Title</span>
+                <a asp-area="Admin"
+                   asp-controller="Books"
+                   asp-action="Detail"
+                   asp-route-id="@related.Id"
+                   class="btn btn-sm btn-outline-primary">
+                    View Detail
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+<a asp-area="Admin"
+   asp-controller="Books"
+   asp-action="Index"
+   class="btn btn-secondary">
+    Back to list
+</a>

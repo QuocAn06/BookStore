@@ -1,0 +1,48 @@
+﻿@model BookStore.Models.ViewModels.AdminBooksIndexVM
+
+<form method="get" asp-area="Admin" asp-controller="Books" asp-action="Index" class="mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label" for="title">Search title</label>
+            <input id="title" name="title" class="form-control"
+                   value="@Model.TitleSearch" placeholder="Contains..." />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="categoryId">Category</label>
+            <select id="categoryId" name="categoryId" class="form-select"
+                    asp-items="Model.CategoryOptions"></select>
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary">Apply</button>
+            <a asp-area="Admin" asp-controller="Books" asp-action="Index" class="btn btn-outline-secondary ms-1">Clear</a>
+        </div>
+    </div>
+</form>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Author</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Books)
+        {
+            <tr>
+                <td>@item.Title</td>
+                <td>@item.Author</td>
+                <td>
+                    <a asp-area="Admin"
+                       asp-controller="Books"
+                       asp-action="Detail"
+                       asp-route-id="@item.Id"
+                       class="btn btn-sm btn-info">
+                        Detail
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
