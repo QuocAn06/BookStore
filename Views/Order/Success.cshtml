@@ -1,0 +1,32 @@
+﻿@model BookStore.Models.Order
+@{
+    ViewData["Title"] = "Order placed";
+}
+
+<h1>Thank you!</h1>
+<p>Order #@Model.Id — Status: @Model.Status</p>
+<p><strong>Total:</strong> @Model.TotalAmount.ToString("N0")</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Book</th>
+            <th>Price (snapshot)</th>
+            <th>Qty</th>
+            <th>Line total</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var line in Model.OrderDetails)
+        {
+            <tr>
+                <td>@(line.Book?.Title ?? "—")</td>
+                <td>@line.Price.ToString("N0")</td>
+                <td>@line.Quantity</td>
+                <td>@((line.Price * line.Quantity).ToString("N0"))</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<a asp-controller="Home" asp-action="Index" class="btn btn-primary">Continue shopping</a>

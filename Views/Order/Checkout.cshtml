@@ -1,0 +1,39 @@
+﻿@model BookStore.Models.Cart
+@{
+    ViewData["Title"] = "Checkout";
+}
+
+<h1>Checkout</h1>
+
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Book</th>
+            <th>Price</th>
+            <th>Qty</th>
+            <th>Line total</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Items)
+        {
+            <tr>
+                <td>@item.Name</td>
+                <td>@item.UnitPrice.ToString("N0")</td>
+                <td>@item.Quantity</td>
+                <td>@item.LineTotal.ToString("N0")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<p><strong>Estimated total:</strong> @Model.GrandTotal.ToString("N0")</p>
+<p class="text-muted">Final total is calculated from current database prices when you place the order.</p>
+
+<form asp-action="PlaceOrder" method="post">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn btn-primary">Place order</button>
+    <a asp-controller="Cart" asp-action="Index" class="btn btn-secondary">Back to cart</a>
+</form>
