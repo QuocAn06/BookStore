@@ -48,6 +48,9 @@ else
         </tbody>
     </table>
     <p><strong>Grand total:</strong> @Model.GrandTotal.ToString("N0")</p>
+    <form asp-controller="Order" asp-action="Checkout" method="get" class="mt-3">
+        <button type="submit" class="btn btn-success">Proceed to checkout</button>
+    </form>
 }
 
 <hr />
