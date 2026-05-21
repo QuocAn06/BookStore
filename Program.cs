@@ -1,5 +1,6 @@
 using BookStore.Data;
 using BookStore.Models;
+using BookStore.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +35,9 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
     // options.Cookie.Name = ".MyApp.Session"; // optional
 });
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICartSessionService, CartSessionService>();
 
 var app = builder.Build();
 

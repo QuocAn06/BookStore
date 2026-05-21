@@ -1,0 +1,61 @@
+﻿@model BookStore.Models.Cart
+@{
+    ViewData["Title"] = "Shopping Cart";
+}
+
+<h1>Shopping Cart</h1>
+
+@if (Model.Items.Count == 0)
+{
+    <p>Your cart is empty.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Book</th>
+                <th>Price</th>
+                <th>Qty</th>
+                <th>Line total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>@item.Name</td>
+                    <td>@item.UnitPrice.ToString("N0")</td>
+                    <td>
+                        <form asp-action="Update" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="bookId" value="@item.ProductId" />
+                            <input type="number" name="quantity" value="@item.Quantity" min="1" class="form-control d-inline" style="width:80px" />
+                            <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                        </form>
+                    </td>
+                    <td>@item.LineTotal.ToString("N0")</td>
+                    <td>
+                        <form asp-action="Remove" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="bookId" value="@item.ProductId" />
+                            <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p><strong>Grand total:</strong> @Model.GrandTotal.ToString("N0")</p>
+}
+
+<hr />
+<h2>Test: Add book (dev only)</h2>
+<p>Use a real <code>bookId</code> from your database.</p>
+<form asp-action="Add" method="post">
+    @Html.AntiForgeryToken()
+    <label>Book Id: <input type="number" name="bookId" value="1" /></label>
+    <label>Qty: <input type="number" name="quantity" value="1" min="1" /></label>
+    <button type="submit" class="btn btn-success">Add to cart</button>
+</form>
