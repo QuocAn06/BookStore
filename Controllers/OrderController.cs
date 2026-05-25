@@ -57,7 +57,7 @@ namespace BookStore.Controllers
             var order = new Order
             {
                 UserId = userId,
-                Status = "Pending",
+                Status = OrderStatuses.Pending,
                 OrderDetails = new List<OrderDetail>()
             };
 
