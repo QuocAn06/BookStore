@@ -27,8 +27,8 @@ BookStore/
 │   ├── Controllers/
 │   └── Views/
 ├── Controllers/              # Client: Home, Account, Cart, Order
-├── Data/                     # ApplicationDbContext
-├── Models/                   # Entity, OrderStatuses, ViewModels
+├── Data/                     # ApplicationDbContext, IdentitySeed
+├── Models/                   # Entity, Roles, OrderStatuses, ViewModels
 ├── Services/                 # ICartSessionService, CartSessionService
 ├── Views/                    # Razor views (client)
 └── Migrations/               # EF Core migrations
@@ -74,40 +74,34 @@ URL mặc định (xem `Properties/launchSettings.json`):
 | `/Account/Login` | Đăng nhập | |
 | `/Cart` | Giỏ hàng | Form test “Add book” (dev) |
 | `/Order/Checkout` | Thanh toán | Cần đăng nhập |
-| `/Admin/Category` | CRUD danh mục | |
-| `/Admin/Book` | CRUD sách + upload ảnh | |
-| `/Admin/Books` | Duyệt sách, search/filter | |
-| `/Admin/Order` | Danh sách đơn hàng | `[Authorize(Roles = "Admin")]` |
+| `/Admin/Home` | Trang chủ admin (danh sách sách) | Cần role **Admin** |
+| `/Admin/Category` | CRUD danh mục | Cần role **Admin** |
+| `/Admin/Book` | CRUD sách + upload ảnh | Cần role **Admin** |
+| `/Admin/Books` | Duyệt sách, search/filter | Cần role **Admin** |
+| `/Admin/Order` | Danh sách & chi tiết đơn hàng | Cần role **Admin** |
+
+Toàn bộ controller trong `Areas/Admin` kế thừa `AdminControllerBase` với `[Authorize(Roles = Roles.Admin)]`.
 
 ---
 
 ## Tài khoản Admin (role `Admin`)
 
-`Areas/Admin/Controllers/OrderController` yêu cầu role **Admin**. User đăng ký thường **không** có role này.
+Khi app khởi động, `Data/IdentitySeed.cs` tự động (idempotent):
 
-### Cách nhanh: Register + SQL
+1. Tạo role **Admin** nếu chưa có.
+2. Tạo user admin nếu chưa có.
+3. Gán user vào role Admin.
 
-1. Đăng ký tại `/Account/Register` (ví dụ `admin@bookstore.local` / `Admin@123`).
-2. Trong SSMS / Azure Data Studio, chạy trên database `BookStoreDb`:
+| Trường | Giá trị mặc định (dev) |
+|--------|-------------------------|
+| Email | `admin@bookstore.com` |
+| Mật khẩu | `Admin@123` |
 
-```sql
-IF NOT EXISTS (SELECT 1 FROM AspNetRoles WHERE Name = N'Admin')
-    INSERT INTO AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp)
-    VALUES (NEWID(), N'Admin', N'ADMIN', NEWID());
+**Đăng nhập:** `/Account/Login` → mở bất kỳ URL `/Admin/...`.
 
-DECLARE @UserId NVARCHAR(450) = (SELECT Id FROM AspNetUsers WHERE Email = N'admin@bookstore.local');
-DECLARE @RoleId NVARCHAR(450) = (SELECT Id FROM AspNetRoles WHERE Name = N'Admin');
+User đăng ký qua `/Account/Register` **không** có role Admin và **không** truy cập được Area Admin.
 
-IF @UserId IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM AspNetUserRoles WHERE UserId = @UserId AND RoleId = @RoleId
-)
-    INSERT INTO AspNetUserRoles (UserId, RoleId) VALUES (@UserId, @RoleId);
-```
-
-3. **Logout** → **Login** lại bằng user admin.
-4. Mở `/Admin/Order`.
-
-**Kiểm tra:**
+### Kiểm tra trong database
 
 ```sql
 SELECT u.Email, r.Name AS RoleName
@@ -116,15 +110,22 @@ JOIN AspNetUserRoles ur ON u.Id = ur.UserId
 JOIN AspNetRoles r ON ur.RoleId = r.Id;
 ```
 
+### Gán role thủ công (tùy chọn)
+
+Nếu muốn nâng user đã đăng ký thành admin: đổi `AdminEmail` trong `IdentitySeed.cs` thành email đó rồi chạy lại app, hoặc chèn qua SQL vào `AspNetUserRoles` (xem migration Identity).
+
 ### Lỗi thường gặp
 
 | Hiện tượng | Nguyên nhân | Xử lý |
 |------------|-------------|--------|
-| Redirect `/Account/AccessDenied?ReturnUrl=/Admin/Order` | Đã login nhưng **không** có role Admin | Gán role SQL + login lại |
+| Redirect `/Account/Login?ReturnUrl=/Admin/...` | Chưa đăng nhập | Login bằng `admin@bookstore.com` |
+| Redirect `/Account/AccessDenied?ReturnUrl=/Admin/...` | Đã login nhưng **không** có role Admin | Dùng tài khoản seed hoặc gán role |
 | 404 trên `/Account/AccessDenied` | Chưa có action/view AccessDenied | Thêm `AccountController.AccessDenied` + view (tùy chọn) |
-| 403 / AccessDenied dù SQL đã gán role | Chưa logout/login sau khi gán role | Logout → Login lại |
+| 403 / AccessDenied dù đã gán role | Chưa logout/login sau khi gán role | Logout → Login lại |
 
-**Gợi ý test:** Dùng user khách (checkout) và user admin (quản lý đơn) — tách trình duyệt thường / Incognito để tránh nhầm cookie.
+**Gợi ý test:** User khách (checkout) và user admin (quản lý) — dùng cửa sổ thường / Incognito để tránh nhầm cookie.
+
+**Cookie:** `Program.cs` cấu hình `ConfigureApplicationCookie` (`LoginPath`, `AccessDeniedPath`).
 
 ---
 
@@ -144,8 +145,8 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 
 ## Tình trạng feature (cập nhật theo `plan.md`)
 
-**Tiến độ tổng:** **9 / 15** task chính hoàn thành đủ Definition of Done (~**60%**).  
-**Milestone “hoàn chỉnh” trong plan:** đạt **3 / 4** (CRUD Book/Category + Cart/Order + Admin quản lý đơn; còn storefront client và role Admin đồng bộ toàn Area).
+**Tiến độ tổng:** **10 / 15** task chính hoàn thành đủ Definition of Done (~**67%**).  
+**Milestone “hoàn chỉnh” trong plan:** đạt **4 / 4** phần lõi (CRUD Admin, Cart/Order, quản lý đơn, role Admin); còn **storefront client** (Task 6–7) và polish (Phase 5).
 
 ### Phase 1 — Setup & Foundation (3/3)
 
@@ -172,12 +173,12 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 | 9 | Checkout → Order + OrderDetail (copy giá, TotalAmount) | Done |
 | 10 | Quản lý đơn Admin (list, detail, cập nhật status) | Done |
 
-### Phase 4 — Authorization & Structure (1/2)
+### Phase 4 — Authorization & Structure (2/2)
 
 | Task | Mô tả | Trạng thái |
 |------|--------|------------|
 | 11 | Area Admin (`/Admin/...`) | Done |
-| 12 | Role Admin + chặn route Admin | Một phần (`[Authorize(Roles = "Admin")]` trên `OrderController`; chưa seed tự động; các controller Admin khác chưa gắn role) |
+| 12 | Role Admin + seed + chặn toàn Area Admin | Done (`Roles.cs`, `IdentitySeed`, `AdminControllerBase`) |
 
 ### Phase 5 — Polish (0/3 hoàn chỉnh)
 
@@ -192,7 +193,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 | Task | Trạng thái |
 |------|------------|
 | 16 — Logging khi tạo order | Chưa |
-| 17 — Seed Category + Book / Admin user | Chưa |
+| 17 — Seed Category + Book / Admin user | Một phần (seed admin user + role qua `IdentitySeed`; chưa seed sách/danh mục) |
 | 18 — Unit test | Chưa |
 
 ---
@@ -205,14 +206,15 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 - **Giỏ hàng:** session JSON qua `ICartSessionService`.
 - **Đặt hàng (client):** `OrderController` — `[Authorize]`; lưu Order/OrderDetail; `OrderStatuses.Pending`; copy `Price` từ Book; `TotalAmount`; trừ tồn kho trong transaction.
 - **Quản lý đơn (admin):** `Admin/Order` — list (kèm email user), detail (line items + snapshot giá), `UpdateStatus` với whitelist `OrderStatuses.All`.
+- **Phân quyền:** `Models/Roles.cs`; seed role/user qua `IdentitySeed` khi startup; `AdminControllerBase` bảo vệ mọi controller trong `Areas/Admin`.
 
 ---
 
 ## Việc cần làm tiếp (ưu tiên mentor)
 
-1. **Task 12 hoàn chỉnh:** `DbInitializer` seed role + user admin; `[Authorize(Roles = "Admin")]` cho toàn bộ controller trong `Areas/Admin`; trang `Account/AccessDenied`.
-2. **Storefront client (Task 6–7):** trang chủ danh sách sách, chi tiết, pagination, search/filter; nút “Thêm vào giỏ” từ catalog.
-3. **Polish (Task 13–15):** dashboard, mở rộng service layer, hoàn thiện UX/validation phía client.
+1. **Storefront client (Task 6–7):** trang chủ danh sách sách, chi tiết, pagination, search/filter; nút “Thêm vào giỏ” từ catalog.
+2. **Polish (Task 13–15):** dashboard, mở rộng service layer, hoàn thiện UX/validation phía client.
+3. **Tùy chọn UX auth:** `Account/AccessDenied` + view; ẩn link Admin trên `_Layout` khi `User.IsInRole(Roles.Admin)`.
 4. **README / demo:** screenshot luồng checkout → admin đổi status.
 
 ---
@@ -222,6 +224,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 - Logic nghiệp vụ nên dần chuyển sang `/Services` (theo `plan.md`); hiện Order/Book/Category vẫn nằm trong controller.
 - Không query trong View; filter/search dùng `IQueryable` trên EF (đã áp dụng ở `Admin/Books`).
 - Checkout cần user đã login (`[Authorize]` trên `OrderController` client).
+- Area Admin cần role **Admin** (`AdminControllerBase`); seed chạy trong `Program.cs` sau `builder.Build()`.
 - Giá trên `OrderDetail.Price` là snapshot — không đổi khi admin sửa giá sách sau này.
 
 ---

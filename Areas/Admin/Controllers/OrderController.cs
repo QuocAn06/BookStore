@@ -1,14 +1,11 @@
 ﻿using BookStore.Data;
 using BookStore.Models;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    [Authorize(Roles = "Admin")]
-    public class OrderController : Controller
+    public class OrderController : AdminControllerBase
     {
         private readonly ApplicationDbContext _context;
         public OrderController(ApplicationDbContext context)

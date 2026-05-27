@@ -6,8 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    public class CategoryController: Controller
+    public class CategoryController: AdminControllerBase
     {
         private readonly ApplicationDbContext _context;
         public CategoryController(ApplicationDbContext context)

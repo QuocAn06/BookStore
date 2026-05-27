@@ -5,8 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    public class HomeController: Controller
+    public class HomeController: AdminControllerBase
     {
         private const int PageSize = 10;
         private readonly ApplicationDbContext _context;

@@ -7,8 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    public class BookController : Controller
+    public class BookController : AdminControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _webHostEnvironment;
