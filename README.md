@@ -148,7 +148,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 ## Tình trạng feature (cập nhật theo `plan.md`)
 
 **Tiến độ tổng:** **11 / 15** task chính hoàn thành đủ Definition of Done (~**73%**).  
-**Milestone “hoàn chỉnh” trong plan:** đạt **4 / 4** phần lõi (CRUD Admin, Cart/Order, quản lý đơn, role Admin); còn **storefront client** (Task 6–7) và polish (Phase 5, trừ dashboard).
+**Milestone “hoàn chỉnh” trong plan:** đạt **4 / 4** phần lõi (CRUD Admin, Cart/Order, quản lý đơn, role Admin); còn **storefront client** (Task 6–7) và polish (Phase 5 — Task 15 service layer).
 
 ### Phase 1 — Setup & Foundation (3/3)
 
@@ -187,7 +187,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 | Task | Mô tả | Trạng thái |
 |------|--------|------------|
 | 13 | Dashboard (tổng đơn, doanh thu) | Done |
-| 14 | Validation + UX | Một phần (DataAnnotations trên model; admin form OK; client UX còn sơ) |
+| 14 | Validation + UX | **Done (Admin)** — DataAnnotations + hiển thị lỗi trên form Create/Edit Book & Category; client storefront chưa có (Task 6–7) |
 | 15 | Service layer (tách logic khỏi controller) | Một phần (chỉ `CartSessionService`) |
 
 ### Optional
@@ -204,12 +204,50 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 
 - **Identity:** đăng ký, đăng nhập, đăng xuất (`AccountController`, `_LoginPartial`).
 - **Admin:** CRUD Category; CRUD Book kèm upload ảnh vào `wwwroot/images/books`.
+- **Validation (Admin):** Data Annotations trên `Category`, `Book`, `BookFormVM`; kiểm tra `ModelState.IsValid` trong controller; hiển thị lỗi qua `asp-validation-for` + `asp-validation-summary="All"` + `_ValidationScriptsPartial` (client-side).
 - **Admin browse:** `Admin/Books` — tìm theo title, lọc category (LINQ `IQueryable` trên DB).
 - **Giỏ hàng:** session JSON qua `ICartSessionService`.
 - **Đặt hàng (client):** `OrderController` — `[Authorize]`; lưu Order/OrderDetail; `OrderStatuses.Pending`; copy `Price` từ Book; `TotalAmount`; trừ tồn kho trong transaction.
 - **Quản lý đơn (admin):** `Admin/Order` — list (kèm email user), detail (line items + snapshot giá), `UpdateStatus` với whitelist `OrderStatuses.All`.
 - **Dashboard (admin):** `Admin/Home` — card **Tổng đơn hàng** (`CountAsync` trên `Orders`), **Tổng doanh thu** (`SumAsync` trên `TotalAmount`, filter `Completed`); ViewModel `AdminHomeBooksVM`; query trong `Areas/Admin/Controllers/HomeController`.
 - **Phân quyền:** `Models/Roles.cs`; seed role/user qua `IdentitySeed` khi startup; `AdminControllerBase` bảo vệ mọi controller trong `Areas/Admin`.
+
+---
+
+## Validation — Book & Category (Admin)
+
+Validation dùng **Data Annotations** (server-side) và **jQuery Unobtrusive Validation** (client-side).
+
+### Model / ViewModel
+
+| File | Quy tắc chính |
+|------|----------------|
+| `Models/Category.cs` | `Name`: Required, StringLength(2–100); `Description`: StringLength(500) |
+| `Models/Book.cs` | `Title`, `Author`: Required + StringLength; `Price`: Range > 0; `Stock`: Range ≥ 0; `CategoryId`: Range(1, int.MaxValue) |
+| `Models/ViewModels/BookFormVM.cs` | Cùng quy tắc form Book (form bind vào VM, **không** bind trực tiếp entity `Book`) |
+
+**Lưu ý:** `CategoryId` dùng `[Range(1, int.MaxValue)]` thay vì `[Required]` vì `int` mặc định = `0` khi dropdown chọn `-- Select category --`.
+
+### Controller
+
+- `CategoryController` — Create/Edit POST: `if (!ModelState.IsValid) return View(category);`
+- `BookController` — Create/Edit POST: kiểm tra `ModelState`, reload `CategoryList` trước khi `return View(vm)`
+
+### View
+
+Mỗi field: `<label asp-for>` + `<input/select asp-for>` + `<span asp-validation-for class="text-danger">`.  
+Đầu form: `<div asp-validation-summary="All">`.  
+Cuối view: `@section Scripts { <partial name="_ValidationScriptsPartial" /> }`
+
+Form áp dụng: `Areas/Admin/Views/Category/Create.cshtml`, `Edit.cshtml`, `Book/Create.cshtml`, `Edit.cshtml`.
+
+### Manual test — Validation
+
+1. `/Admin/Category/Create` — để trống **Name** → lỗi đỏ, không redirect.
+2. `/Admin/Category/Create` — **Name** = `A` → lỗi minimum length (2 ký tự).
+3. `/Admin/Book/Create` — **Price** = `0` → lỗi Price.
+4. `/Admin/Book/Create` — không chọn Category → `"Category is required."`
+5. Submit form invalid → trang giữ nguyên, lỗi hiện dưới field và ở đầu form.
 
 ---
 
@@ -228,7 +266,7 @@ User không có role Admin không vào được `/Admin/Home` (403 / Access Deni
 ## Việc cần làm tiếp (ưu tiên mentor)
 
 1. **Storefront client (Task 6–7):** trang chủ danh sách sách, chi tiết, pagination, search/filter; nút “Thêm vào giỏ” từ catalog.
-2. **Polish (Task 14–15):** mở rộng service layer, hoàn thiện UX/validation phía client.
+2. **Polish (Task 15):** mở rộng service layer; validation client catalog khi làm Task 6–7.
 3. **Dashboard (tùy chọn PRD):** card **Tổng sách** trên `/Admin/Home` (dùng sẵn `TotalCount` trong `AdminHomeBooksVM`).
 4. **Tùy chọn UX auth:** `Account/AccessDenied` + view; hiện link Admin trên `_Layout` chỉ khi `User.IsInRole(Roles.Admin)`.
 5. **Demo:** screenshot luồng checkout → admin đổi status → dashboard cập nhật.
@@ -243,6 +281,8 @@ User không có role Admin không vào được `/Admin/Home` (403 / Access Deni
 - Area Admin cần role **Admin** (`AdminControllerBase`); seed chạy trong `Program.cs` sau `builder.Build()`.
 - Giá trên `OrderDetail.Price` là snapshot — không đổi khi admin sửa giá sách sau này.
 - Dashboard query dùng `AsNoTracking()`; doanh thu filter `OrderStatuses.Completed` — đổi quy tắc (ví dụ loại trừ `Cancelled`) cần sửa `HomeController` và cập nhật mục test/README cho nhất quán.
+- Form Book bind `BookFormVM` — annotations validation phải đặt trên VM; entity `Book` dùng khi map sang DB.
+- `CategoryId` trên dropdown: dùng `[Range(1, int.MaxValue)]`, không dùng `[Required]` trên kiểu `int`.
 
 ---
 

@@ -27,7 +27,7 @@ namespace BookStore.Models
 
         // FK
         [Display(Name = "Category")]
-        [Required(ErrorMessage = "Category is required.")]
+        [Range(1, int.MaxValue, ErrorMessage = "Category is required.")]
         public int CategoryId { get; set; }
         
         // Many Books belong to one Category
