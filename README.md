@@ -74,7 +74,7 @@ URL mặc định (xem `Properties/launchSettings.json`):
 | `/Account/Login` | Đăng nhập | |
 | `/Cart` | Giỏ hàng | Form test “Add book” (dev) |
 | `/Order/Checkout` | Thanh toán | Cần đăng nhập |
-| `/Admin/Home` | Trang chủ admin (danh sách sách) | Cần role **Admin** |
+| `/Admin/Home` | Dashboard admin (tổng đơn, doanh thu) + danh sách sách phân trang | Cần role **Admin** |
 | `/Admin/Category` | CRUD danh mục | Cần role **Admin** |
 | `/Admin/Book` | CRUD sách + upload ảnh | Cần role **Admin** |
 | `/Admin/Books` | Duyệt sách, search/filter | Cần role **Admin** |
@@ -141,12 +141,14 @@ Nếu muốn nâng user đã đăng ký thành admin: đổi `AdminEmail` trong 
 
 Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/Detail/{id}`.
 
+**Dashboard — tổng doanh thu:** chỉ cộng đơn có `Status == Completed` (đơn `Pending` / `Cancelled` không tính). **Tổng đơn:** đếm mọi đơn trong bảng `Orders`.
+
 ---
 
 ## Tình trạng feature (cập nhật theo `plan.md`)
 
-**Tiến độ tổng:** **10 / 15** task chính hoàn thành đủ Definition of Done (~**67%**).  
-**Milestone “hoàn chỉnh” trong plan:** đạt **4 / 4** phần lõi (CRUD Admin, Cart/Order, quản lý đơn, role Admin); còn **storefront client** (Task 6–7) và polish (Phase 5).
+**Tiến độ tổng:** **11 / 15** task chính hoàn thành đủ Definition of Done (~**73%**).  
+**Milestone “hoàn chỉnh” trong plan:** đạt **4 / 4** phần lõi (CRUD Admin, Cart/Order, quản lý đơn, role Admin); còn **storefront client** (Task 6–7) và polish (Phase 5, trừ dashboard).
 
 ### Phase 1 — Setup & Foundation (3/3)
 
@@ -180,11 +182,11 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 | 11 | Area Admin (`/Admin/...`) | Done |
 | 12 | Role Admin + seed + chặn toàn Area Admin | Done (`Roles.cs`, `IdentitySeed`, `AdminControllerBase`) |
 
-### Phase 5 — Polish (0/3 hoàn chỉnh)
+### Phase 5 — Polish (1/3 hoàn chỉnh)
 
 | Task | Mô tả | Trạng thái |
 |------|--------|------------|
-| 13 | Dashboard (tổng đơn, doanh thu) | Chưa |
+| 13 | Dashboard (tổng đơn, doanh thu) | Done |
 | 14 | Validation + UX | Một phần (DataAnnotations trên model; admin form OK; client UX còn sơ) |
 | 15 | Service layer (tách logic khỏi controller) | Một phần (chỉ `CartSessionService`) |
 
@@ -206,16 +208,30 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 - **Giỏ hàng:** session JSON qua `ICartSessionService`.
 - **Đặt hàng (client):** `OrderController` — `[Authorize]`; lưu Order/OrderDetail; `OrderStatuses.Pending`; copy `Price` từ Book; `TotalAmount`; trừ tồn kho trong transaction.
 - **Quản lý đơn (admin):** `Admin/Order` — list (kèm email user), detail (line items + snapshot giá), `UpdateStatus` với whitelist `OrderStatuses.All`.
+- **Dashboard (admin):** `Admin/Home` — card **Tổng đơn hàng** (`CountAsync` trên `Orders`), **Tổng doanh thu** (`SumAsync` trên `TotalAmount`, filter `Completed`); ViewModel `AdminHomeBooksVM`; query trong `Areas/Admin/Controllers/HomeController`.
 - **Phân quyền:** `Models/Roles.cs`; seed role/user qua `IdentitySeed` khi startup; `AdminControllerBase` bảo vệ mọi controller trong `Areas/Admin`.
+
+---
+
+## Manual test — Dashboard (Task 13)
+
+1. `dotnet run` → đăng nhập `admin@bookstore.com` / `Admin@123`.
+2. Mở `/Admin/Home` — kiểm tra hai card và bảng sách phía dưới.
+3. **Tổng đơn:** tạo đơn qua `/Cart` → `/Order/Checkout` (user đã login) → F5 dashboard → số đơn tăng.
+4. **Tổng doanh thu:** đơn mới mặc định `Pending` (doanh thu chưa tăng) → `/Admin/Order/Detail/{id}` → đổi **Completed** → F5 → doanh thu cộng đúng `TotalAmount`.
+5. (Tùy chọn) SQL: `SELECT COUNT(*) FROM Orders`; `SELECT SUM(TotalAmount) FROM Orders WHERE Status = N'Completed'`.
+
+User không có role Admin không vào được `/Admin/Home` (403 / Access Denied).
 
 ---
 
 ## Việc cần làm tiếp (ưu tiên mentor)
 
 1. **Storefront client (Task 6–7):** trang chủ danh sách sách, chi tiết, pagination, search/filter; nút “Thêm vào giỏ” từ catalog.
-2. **Polish (Task 13–15):** dashboard, mở rộng service layer, hoàn thiện UX/validation phía client.
-3. **Tùy chọn UX auth:** `Account/AccessDenied` + view; ẩn link Admin trên `_Layout` khi `User.IsInRole(Roles.Admin)`.
-4. **README / demo:** screenshot luồng checkout → admin đổi status.
+2. **Polish (Task 14–15):** mở rộng service layer, hoàn thiện UX/validation phía client.
+3. **Dashboard (tùy chọn PRD):** card **Tổng sách** trên `/Admin/Home` (dùng sẵn `TotalCount` trong `AdminHomeBooksVM`).
+4. **Tùy chọn UX auth:** `Account/AccessDenied` + view; hiện link Admin trên `_Layout` chỉ khi `User.IsInRole(Roles.Admin)`.
+5. **Demo:** screenshot luồng checkout → admin đổi status → dashboard cập nhật.
 
 ---
 
@@ -226,6 +242,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 - Checkout cần user đã login (`[Authorize]` trên `OrderController` client).
 - Area Admin cần role **Admin** (`AdminControllerBase`); seed chạy trong `Program.cs` sau `builder.Build()`.
 - Giá trên `OrderDetail.Price` là snapshot — không đổi khi admin sửa giá sách sau này.
+- Dashboard query dùng `AsNoTracking()`; doanh thu filter `OrderStatuses.Completed` — đổi quy tắc (ví dụ loại trừ `Cancelled`) cần sửa `HomeController` và cập nhật mục test/README cho nhất quán.
 
 ---
 
