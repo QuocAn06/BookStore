@@ -1,21 +1,25 @@
 ﻿using System.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
 using BookStore.Models;
+using BookStore.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace BookStore.Controllers;
 
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
+    private readonly IBookService _bookService;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(ILogger<HomeController> logger, IBookService bookService)
     {
         _logger = logger;
+        _bookService = bookService;
     }
 
-    public IActionResult Index()
+    public async Task<IActionResult> Index(int page = 1)
     {
-        return View();
+        var vm = await _bookService.GetCatalogAsync(page);
+        return View(vm);
     }
 
     public IActionResult Privacy()
