@@ -1,18 +1,16 @@
-﻿using BookStore.Data;
-using BookStore.Services;
+﻿using BookStore.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Controllers
 {
     public class CartController: Controller
     {
         private readonly ICartSessionService _cart;
-        private readonly ApplicationDbContext _db;
-        public CartController(ICartSessionService cart, ApplicationDbContext db)
+        private readonly IBookService _bookService;
+        public CartController(ICartSessionService cart, IBookService bookService)
         {
             _cart = cart;
-            _db = db;
+            _bookService = bookService;
         }
 
         [HttpGet]
@@ -26,7 +24,7 @@ namespace BookStore.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(int bookId, int quantity = 1)
         {
-            var book = await _db.Books.AsNoTracking().FirstOrDefaultAsync(b => b.Id == bookId);
+            var book = await _bookService.GetByIdAsync(bookId);
             if (book is null)
                 return NotFound();
             if (quantity <= 0)
