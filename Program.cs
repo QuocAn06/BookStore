@@ -51,7 +51,17 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 var app = builder.Build();
 
-await IdentitySeed.SeedAsync(app.Services);
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await context.Database.MigrateAsync();
+}
+
+if (app.Environment.IsDevelopment())
+{
+    await IdentitySeed.SeedAsync(app.Services);
+    await CatalogSeed.SeedAsync(app.Services);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

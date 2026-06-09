@@ -48,7 +48,7 @@ BookStore/
 │   ├── Controllers/          # Category, Book, Books, Order, Home
 │   └── Views/
 ├── Controllers/              # Client: Home, Account, Cart, Order
-├── Data/                     # ApplicationDbContext, IdentitySeed
+├── Data/                     # ApplicationDbContext, IdentitySeed, CatalogSeed
 ├── Infrastructure/           # SessionKeys
 ├── Models/                   # Entity, Roles, OrderStatuses, ViewModels
 ├── Services/                 # Business logic layer
@@ -81,7 +81,9 @@ BookStore/
 "Server=(localdb)\\MSSQLLocalDB;Database=BookStoreDb;Trusted_Connection=True;..."
 ```
 
-2. Áp dụng migration:
+2. Chạy app lần đầu — `Program.cs` tự gọi `MigrateAsync()` khi startup (tạo/cập nhật schema).
+
+   Hoặc áp dụng migration thủ công (tùy chọn):
 
 ```bash
 dotnet ef database update
@@ -121,13 +123,34 @@ Toàn bộ controller trong `Areas/Admin` kế thừa `AdminControllerBase` vớ
 
 ---
 
-## Tài khoản Admin
+## Seed dữ liệu (Development)
 
-Khi app khởi động, `Data/IdentitySeed.cs` tự động (idempotent):
+Khi app khởi động trong môi trường **Development**, `Program.cs` thực hiện:
 
-1. Tạo role **Admin** nếu chưa có
-2. Tạo user admin nếu chưa có
-3. Gán user vào role Admin
+```
+MigrateAsync()  →  IdentitySeed  →  CatalogSeed
+```
+
+| Bước | File | Mô tả |
+|------|------|--------|
+| 1 | `Program.cs` | `Database.MigrateAsync()` — apply migration (mọi môi trường) |
+| 2 | `Data/IdentitySeed.cs` | Role Admin + user admin (idempotent) |
+| 3 | `Data/CatalogSeed.cs` | 3 category + 4 book mẫu (idempotent) |
+
+Seed **chỉ chạy khi** `ASPNETCORE_ENVIRONMENT=Development` (mặc định khi F5).
+
+### Dữ liệu mẫu (Catalog)
+
+| Category | Sách |
+|----------|------|
+| Fiction | The Great Gatsby, 1984 |
+| Science | A Brief History of Time |
+| Technology | Clean Code |
+
+- Không gán `Id` thủ công — SQL Server Identity tự sinh; Book dùng `CategoryId` từ entity đã lưu.
+- Nếu bảng `Categories` đã có dòng → seed bỏ qua (không duplicate).
+
+### Tài khoản Admin (Identity seed)
 
 | Trường | Giá trị mặc định (dev) |
 |--------|-------------------------|
@@ -136,14 +159,32 @@ Khi app khởi động, `Data/IdentitySeed.cs` tự động (idempotent):
 
 User đăng ký qua `/Account/Register` **không** có role Admin.
 
-### Kiểm tra role trong database
+### Kiểm tra seed trong database
 
 ```sql
+-- Identity
 SELECT u.Email, r.Name AS RoleName
 FROM AspNetUsers u
 JOIN AspNetUserRoles ur ON u.Id = ur.UserId
 JOIN AspNetRoles r ON ur.RoleId = r.Id;
+
+-- Catalog
+SELECT COUNT(*) AS CategoryCount FROM Categories;  -- kỳ vọng: 3
+SELECT COUNT(*) AS BookCount FROM Books;           -- kỳ vọng: 4
+
+SELECT b.Title, c.Name AS CategoryName
+FROM Books b
+JOIN Categories c ON b.CategoryId = c.Id;
 ```
+
+### Reset seed catalog (khi cần test lại)
+
+```sql
+DELETE FROM Books;
+DELETE FROM Categories;
+```
+
+Sau đó restart app — seed chèn lại dữ liệu mẫu.
 
 ### Lỗi thường gặp
 
@@ -152,6 +193,8 @@ JOIN AspNetRoles r ON ur.RoleId = r.Id;
 | Redirect `/Account/Login?ReturnUrl=/Admin/...` | Chưa đăng nhập | Login bằng `admin@bookstore.com` |
 | `/Account/AccessDenied` | Đã login nhưng không có role Admin | Dùng tài khoản seed |
 | 403 sau khi gán role | Cookie cũ | Logout → Login lại |
+| Trang chủ: "Chưa có sách nào" | Seed chưa chạy hoặc DB cũ | Kiểm tra `Development`; xóa Categories/Books rồi restart |
+| `IDENTITY_INSERT is OFF` | Gán `Id` thủ công khi seed runtime | Bỏ `Id` trong seed; lưu Category trước, dùng `fiction.Id` cho Book |
 
 ---
 
@@ -230,14 +273,13 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 | Phase 2 — Core Business | Done (Admin CRUD + client catalog) |
 | Phase 3 — Cart & Order | Done |
 | Phase 4 — Authorization & Area Admin | Done |
-| Phase 5 — Polish | Done (Dashboard, Validation Admin, Service layer) |
+| Phase 5 — Polish | Done (Dashboard, Validation Admin, Service layer, Seed data) |
 
 ### Optional (chưa làm)
 
 | Task | Mô tả |
 |------|--------|
 | 16 | Logging khi tạo order |
-| 17 | Seed Category + Book mẫu (hiện chỉ seed admin user) |
 | 18 | Unit test service |
 | — | Client: trang chi tiết sách, search/filter trên storefront |
 | — | README screenshot / deploy |
@@ -248,7 +290,7 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 ### Luồng khách hàng
 
-1. Mở `/` — thấy danh sách sách
+1. Mở `/` — thấy **4 sách** seed (Fiction, Science, Technology)
 2. **Thêm vào giỏ** → `/Cart`
 3. Đăng ký hoặc login → `/Order/Checkout` → **Place Order**
 4. Kiểm tra `/Order/Success/{id}` và DB: `Orders`, `OrderDetails`, `Books.Stock` giảm
@@ -287,6 +329,7 @@ Data Annotations + jQuery Unobtrusive Validation trên form Create/Edit **Catego
 - `PlaceOrder` dùng database transaction khi trừ stock và lưu order
 - Upload ảnh: `IWebHostEnvironment` inject vào `BookService`, lưu tại `wwwroot/images/books`
 - Catalog client (`GetCatalogAsync`) chỉ hiện sách `Stock > 0`
+- Runtime seed: idempotent, không dùng `HasData()`; Category lưu trước Book (FK); chỉ Development
 
 ---
 
