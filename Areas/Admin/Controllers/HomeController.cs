@@ -1,49 +1,21 @@
-﻿using BookStore.Data;
-using BookStore.Models.ViewModels;
+﻿using BookStore.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    public class HomeController: Controller
+    public class HomeController : AdminControllerBase
     {
-        private const int PageSize = 10;
-        private readonly ApplicationDbContext _context;
+        private readonly IDashboardService _dashboardService;
 
-        public HomeController(ApplicationDbContext context)
+        public HomeController(IDashboardService dashboardService)
         {
-            _context = context;
+            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index(int page = 1)
         {
-            if (page < 1) page = 1;
-            
-            var totalCount = await _context.Books.AsNoTracking().CountAsync();
-
-            var totalPages = PageSize <= 0 ? 0 : (int)Math.Ceiling(totalCount / (double)PageSize);
-            if (totalPages > 0 && page > totalPages) page = totalPages;
-
-            var books = await _context.Books
-                .AsNoTracking()
-                .Include(b => b.Category)
-                .OrderByDescending(b => b.Id)
-                .Skip((page - 1) * PageSize)
-                .Take(PageSize)
-                .ToListAsync();
-
-            var vm = new AdminHomeBooksVM
-            {
-                Books = books,
-                CurrentPage = page,
-                PageSize = PageSize,
-                TotalCount = totalCount
-            };
-
+            var vm = await _dashboardService.GetDashboardAsync(page);
             return View(vm);
-
         }
-
     }
 }

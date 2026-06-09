@@ -73,6 +73,11 @@ namespace BookStore.Controllers
                     return Redirect(returnUrl);
                 }
 
+                if (await _userManager.IsInRoleAsync((await _userManager.FindByEmailAsync(vm.Email))!, Roles.Admin))
+                {
+                    return RedirectToAction("Index", "Home", new { area = "Admin" });
+                }
+
                 return RedirectToAction("Index", "Home");
             }
 
@@ -88,5 +93,10 @@ namespace BookStore.Controllers
             return RedirectToAction("Index", "Home");
         }
 
+        [HttpGet]
+        public IActionResult AccessDenied()
+        {
+            return View();
+        }
     }
 }

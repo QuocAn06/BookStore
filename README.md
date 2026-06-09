@@ -1,8 +1,9 @@
 # BookStore
 
-Ứng dụng web bán sách xây dựng với **ASP.NET Core MVC (.NET 6)**, **Entity Framework Core**, và **ASP.NET Core Identity**. Dự án dùng cho học tập / portfolio fresher .NET.
+Ứng dụng web bán sách xây dựng với **ASP.NET Core MVC (.NET 6)**, **Entity Framework Core Code First**, **ASP.NET Core Identity**, và **Service Layer**. Dự án dùng cho học tập / portfolio fresher .NET.
 
-Chi tiết kế hoạch phát triển: [`plan.md`](plan.md).
+- Kế hoạch phát triển: [`plan.md`](plan.md)
+- Yêu cầu sản phẩm: [`PRD.md`](PRD.md)
 
 ---
 
@@ -13,23 +14,55 @@ Chi tiết kế hoạch phát triển: [`plan.md`](plan.md).
 | Framework | ASP.NET Core MVC 6.0 |
 | ORM | Entity Framework Core 6 (SQL Server) |
 | Authentication | ASP.NET Core Identity (`ApplicationUser`) |
-| Giỏ hàng | Session + JSON (`CartSessionService`) |
+| Authorization | Role-based (`Admin`) + Area Admin |
+| Giỏ hàng | Session + JSON (`ICartSessionService`) |
+| Kiến trúc | MVC + Service Layer (`/Services`) |
 | UI | Bootstrap 5, Razor Views |
 
 ---
 
-## Cấu trúc thư mục chính
+## Tính năng chính
+
+### Client (người mua)
+
+- Trang chủ: danh sách sách, phân trang, nút **Thêm vào giỏ**
+- Giỏ hàng: thêm / cập nhật số lượng / xóa (lưu Session)
+- Checkout → tạo `Order` + `OrderDetail` (copy giá từ `Book`, tính `TotalAmount`, trừ tồn kho)
+- Đăng ký / đăng nhập / đăng xuất
+
+### Admin (`/Areas/Admin`)
+
+- Dashboard: tổng đơn hàng, tổng doanh thu (chỉ đơn `Completed`), danh sách sách phân trang
+- CRUD Category
+- CRUD Book + upload ảnh (`wwwroot/images/books`)
+- Duyệt sách: search theo title, filter theo category (`/Admin/Books`)
+- Quản lý đơn hàng: list, detail, cập nhật trạng thái
+
+---
+
+## Cấu trúc thư mục
 
 ```
 BookStore/
-├── Areas/Admin/          # Quản trị (Category, Book, Books browse)
-├── Controllers/          # Client: Home, Account, Cart, Order
-├── Data/                 # ApplicationDbContext
-├── Models/               # Entity + ViewModels
-├── Services/             # ICartSessionService, CartSessionService
-├── Views/                # Razor views (client)
-└── Migrations/           # EF Core migrations
+├── Areas/Admin/              # Quản trị (yêu cầu role Admin)
+│   ├── Controllers/          # Category, Book, Books, Order, Home
+│   └── Views/
+├── Controllers/              # Client: Home, Account, Cart, Order
+├── Data/                     # ApplicationDbContext, IdentitySeed, CatalogSeed
+├── Infrastructure/           # SessionKeys
+├── Models/                   # Entity, Roles, OrderStatuses, ViewModels
+├── Services/                 # Business logic layer
+│   ├── ICartSessionService / CartSessionService
+│   ├── ICategoryService / CategoryService
+│   ├── IBookService / BookService
+│   ├── IOrderService / OrderService
+│   ├── IDashboardService / DashboardService
+│   └── PlaceOrderResult
+├── Views/                    # Razor views (client)
+└── Migrations/               # EF Core migrations
 ```
+
+**Nguyên tắc:** Controller xử lý HTTP (ModelState, View, Redirect, TempData); Service xử lý nghiệp vụ và truy cập DB.
 
 ---
 
@@ -42,8 +75,15 @@ BookStore/
 
 ### Cấu hình database
 
-1. Sửa connection string trong `appsettings.json` (hoặc `appsettings.Development.json`).
-2. Áp dụng migration:
+1. Sửa connection string trong `appsettings.json` nếu cần (mặc định LocalDB: `BookStoreDb`).
+
+```json
+"Server=(localdb)\\MSSQLLocalDB;Database=BookStoreDb;Trusted_Connection=True;..."
+```
+
+2. Chạy app lần đầu — `Program.cs` tự gọi `MigrateAsync()` khi startup (tạo/cập nhật schema).
+
+   Hoặc áp dụng migration thủ công (tùy chọn):
 
 ```bash
 dotnet ef database update
@@ -55,90 +95,241 @@ dotnet ef database update
 dotnet run
 ```
 
-Mở trình duyệt theo URL trong console (thường `https://localhost:7xxx`).
+| Môi trường | URL |
+|------------|-----|
+| HTTPS | `https://localhost:7199` |
+| HTTP | `http://localhost:5127` |
 
 ---
 
-## Tình trạng feature (cập nhật theo `plan.md`)
+## Route quan trọng
 
-**Tiến độ tổng:** **8 / 15** task chính hoàn thành đủ Definition of Done (~**53%**).  
-**Milestone “hoàn chỉnh” trong plan:** đạt **2 / 4** (CRUD Book/Category + Cart/Order flow; thiếu Admin quản lý order và Role Admin).
+| URL | Mô tả | Ghi chú |
+|-----|--------|---------|
+| `/` | Trang chủ — catalog sách | Public |
+| `/Account/Register` | Đăng ký | |
+| `/Account/Login` | Đăng nhập | Admin login → redirect `/Admin/Home` |
+| `/Account/AccessDenied` | Không đủ quyền | |
+| `/Cart` | Giỏ hàng | Session |
+| `/Order/Checkout` | Thanh toán | Cần đăng nhập |
+| `/Order/Success/{id}` | Xác nhận đơn hàng | Cần đăng nhập |
+| `/Admin/Home` | Dashboard admin | Role **Admin** |
+| `/Admin/Category` | CRUD danh mục | Role **Admin** |
+| `/Admin/Book` | CRUD sách + upload ảnh | Role **Admin** |
+| `/Admin/Books` | Duyệt sách, search/filter | Role **Admin** |
+| `/Admin/Order` | Quản lý đơn hàng | Role **Admin** |
 
-### Phase 1 — Setup & Foundation (3/3)
-
-| Task | Mô tả | Trạng thái |
-|------|--------|------------|
-| 1 | Init MVC + EF Core | Done |
-| 2 | Identity Login / Register | Done |
-| 3 | DbContext + Migration (Book, Category, Order, OrderDetail) | Done |
-
-### Phase 2 — Core Business (2/4)
-
-| Task | Mô tả | Trạng thái |
-|------|--------|------------|
-| 4 | Category CRUD (Admin) | Done |
-| 5 | Book CRUD + upload ảnh (Admin) | Done |
-| 6 | Client — danh sách & chi tiết sách (pagination) | Chưa |
-| 7 | Search & filter (client, query trên DB) | Chưa (có filter tương tự tại `Admin/Books`, chưa phải storefront khách) |
-
-### Phase 3 — Cart & Order (2/3)
-
-| Task | Mô tả | Trạng thái |
-|------|--------|------------|
-| 8 | Giỏ hàng Session (add / remove / update) | Done |
-| 9 | Checkout → Order + OrderDetail (copy giá, TotalAmount) | Done |
-| 10 | Quản lý đơn hàng Admin (list, cập nhật status) | Chưa |
-
-### Phase 4 — Authorization & Structure (1/2)
-
-| Task | Mô tả | Trạng thái |
-|------|--------|------------|
-| 11 | Area Admin (`/Admin/...`) | Done |
-| 12 | Role Admin + chặn route Admin | Chưa |
-
-### Phase 5 — Polish (0/3 hoàn chỉnh)
-
-| Task | Mô tả | Trạng thái |
-|------|--------|------------|
-| 13 | Dashboard (tổng đơn, doanh thu) | Chưa |
-| 14 | Validation + UX | Một phần (DataAnnotations trên model; admin form OK; client UX còn sơ) |
-| 15 | Service layer (tách logic khỏi controller) | Một phần (chỉ `CartSessionService`) |
-
-### Optional
-
-| Task | Trạng thái |
-|------|------------|
-| 16 — Logging khi tạo order | Chưa |
-| 17 — Seed Category + Book | Chưa |
-| 18 — Unit test | Chưa |
+Toàn bộ controller trong `Areas/Admin` kế thừa `AdminControllerBase` với `[Authorize(Roles = Roles.Admin)]`.
 
 ---
 
-## Đã triển khai (highlights)
+## Seed dữ liệu (Development)
 
-- **Identity:** đăng ký, đăng nhập, đăng xuất (`AccountController`, `_LoginPartial`).
-- **Admin:** CRUD Category; CRUD Book kèm upload ảnh vào `wwwroot/images/books`.
-- **Admin browse:** `Admin/Books` — tìm theo title, lọc category (LINQ `IQueryable` trên DB).
-- **Giỏ hàng:** session JSON qua `ICartSessionService`.
-- **Đặt hàng:** `OrderController` — yêu cầu đăng nhập; lưu Order/OrderDetail; copy `Price` từ Book; tính `TotalAmount`; trừ tồn kho trong transaction.
+Khi app khởi động trong môi trường **Development**, `Program.cs` thực hiện:
+
+```
+MigrateAsync()  →  IdentitySeed  →  CatalogSeed
+```
+
+| Bước | File | Mô tả |
+|------|------|--------|
+| 1 | `Program.cs` | `Database.MigrateAsync()` — apply migration (mọi môi trường) |
+| 2 | `Data/IdentitySeed.cs` | Role Admin + user admin (idempotent) |
+| 3 | `Data/CatalogSeed.cs` | 3 category + 4 book mẫu (idempotent) |
+
+Seed **chỉ chạy khi** `ASPNETCORE_ENVIRONMENT=Development` (mặc định khi F5).
+
+### Dữ liệu mẫu (Catalog)
+
+| Category | Sách |
+|----------|------|
+| Fiction | The Great Gatsby, 1984 |
+| Science | A Brief History of Time |
+| Technology | Clean Code |
+
+- Không gán `Id` thủ công — SQL Server Identity tự sinh; Book dùng `CategoryId` từ entity đã lưu.
+- Nếu bảng `Categories` đã có dòng → seed bỏ qua (không duplicate).
+
+### Tài khoản Admin (Identity seed)
+
+| Trường | Giá trị mặc định (dev) |
+|--------|-------------------------|
+| Email | `admin@bookstore.com` |
+| Mật khẩu | `Admin@123` |
+
+User đăng ký qua `/Account/Register` **không** có role Admin.
+
+### Kiểm tra seed trong database
+
+```sql
+-- Identity
+SELECT u.Email, r.Name AS RoleName
+FROM AspNetUsers u
+JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+JOIN AspNetRoles r ON ur.RoleId = r.Id;
+
+-- Catalog
+SELECT COUNT(*) AS CategoryCount FROM Categories;  -- kỳ vọng: 3
+SELECT COUNT(*) AS BookCount FROM Books;           -- kỳ vọng: 4
+
+SELECT b.Title, c.Name AS CategoryName
+FROM Books b
+JOIN Categories c ON b.CategoryId = c.Id;
+```
+
+### Reset seed catalog (khi cần test lại)
+
+```sql
+DELETE FROM Books;
+DELETE FROM Categories;
+```
+
+Sau đó restart app — seed chèn lại dữ liệu mẫu.
+
+### Lỗi thường gặp
+
+| Hiện tượng | Nguyên nhân | Xử lý |
+|------------|-------------|--------|
+| Redirect `/Account/Login?ReturnUrl=/Admin/...` | Chưa đăng nhập | Login bằng `admin@bookstore.com` |
+| `/Account/AccessDenied` | Đã login nhưng không có role Admin | Dùng tài khoản seed |
+| 403 sau khi gán role | Cookie cũ | Logout → Login lại |
+| Trang chủ: "Chưa có sách nào" | Seed chưa chạy hoặc DB cũ | Kiểm tra `Development`; xóa Categories/Books rồi restart |
+| `IDENTITY_INSERT is OFF` | Gán `Id` thủ công khi seed runtime | Bỏ `Id` trong seed; lưu Category trước, dùng `fiction.Id` cho Book |
 
 ---
 
-## Việc cần làm tiếp (ưu tiên mentor)
+## Luồng đặt hàng (Checkout)
 
-1. **Storefront client (Task 6–7):** controller/view ngoài Area — trang chủ danh sách sách, chi tiết, pagination, search/filter; nút “Thêm vào giỏ” từ catalog.
-2. **Bảo mật Admin (Task 12):** seed role `Admin`, gán user; `[Authorize(Roles = "Admin")]` cho controllers trong `Areas/Admin`.
-3. **Quản lý đơn (Task 10):** Admin list order + cập nhật `Status`.
-4. **Polish (Task 13–15):** dashboard, mở rộng service layer, hoàn thiện UX/validation phía client.
-5. **README bổ sung:** screenshot, hướng dẫn tài khoản Admin demo (sau khi có seed).
+```
+Trang chủ → Thêm vào giỏ → /Cart → /Order/Checkout → PlaceOrder
+    → OrderService: validate stock, transaction, trừ Stock
+    → Clear cart → /Order/Success/{id}
+```
+
+### Quy tắc nghiệp vụ
+
+- `OrderDetail.Price` = snapshot giá `Book` tại thời điểm đặt — không đổi khi admin sửa giá sau này
+- `TotalAmount` = tổng `Price × Quantity` của các `OrderDetail`
+- Không cho đặt vượt quá `Stock`
+- Giỏ rỗng → redirect về `/Cart`
+
+### Trạng thái đơn hàng
+
+| Status | Ý nghĩa |
+|--------|---------|
+| `Pending` | Vừa đặt (mặc định) |
+| `Processing` | Đang xử lý |
+| `Shipped` | Đã gửi hàng |
+| `Completed` | Hoàn tất — **tính vào doanh thu Dashboard** |
+| `Cancelled` | Đã hủy |
+
+Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/Detail/{id}`.
 
 ---
 
-## Quy ước & ghi chú kỹ thuật
+## Service Layer
 
-- Logic nghiệp vụ nên dần chuyển sang `/Services` (theo `plan.md`); hiện Order/Book/Category vẫn nằm trong controller.
-- Không query trong View; filter/search dùng `IQueryable` trên EF (đã áp dụng ở `Admin/Books`).
-- Checkout cần user đã login (`[Authorize]` trên `OrderController`).
+| Interface | Implementation | Dùng bởi |
+|-----------|------------------|----------|
+| `ICartSessionService` | `CartSessionService` | `CartController`, `OrderController` |
+| `ICategoryService` | `CategoryService` | Admin `CategoryController` |
+| `IBookService` | `BookService` | Admin `BookController`, `BooksController`, `CartController`, `HomeController` |
+| `IOrderService` | `OrderService` | `OrderController`, Admin `OrderController` |
+| `IDashboardService` | `DashboardService` | Admin `HomeController` |
+
+Đăng ký DI trong `Program.cs`:
+
+```csharp
+builder.Services.AddScoped<ICartSessionService, CartSessionService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IBookService, BookService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+```
+
+---
+
+## Data model
+
+| Entity | Mô tả |
+|--------|--------|
+| `ApplicationUser` | User Identity |
+| `Category` | Danh mục sách |
+| `Book` | Sách (FK → Category) |
+| `Order` | Đơn hàng (FK → User) |
+| `OrderDetail` | Chi tiết đơn (FK → Order, Book) |
+
+**Quan hệ:** Category 1–n Book · User 1–n Order · Order 1–n OrderDetail · Book 1–n OrderDetail
+
+---
+
+## Tình trạng theo `plan.md`
+
+**Milestone lõi:** đạt đủ theo PRD (CRUD Admin, Cart/Order, quản lý đơn, Auth + Role, Service layer, Dashboard, storefront client).
+
+| Phase | Trạng thái |
+|-------|------------|
+| Phase 1 — Setup & Foundation | Done |
+| Phase 2 — Core Business | Done (Admin CRUD + client catalog) |
+| Phase 3 — Cart & Order | Done |
+| Phase 4 — Authorization & Area Admin | Done |
+| Phase 5 — Polish | Done (Dashboard, Validation Admin, Service layer, Seed data) |
+
+### Optional (chưa làm)
+
+| Task | Mô tả |
+|------|--------|
+| 16 | Logging khi tạo order |
+| 18 | Unit test service |
+| — | Client: trang chi tiết sách, search/filter trên storefront |
+| — | README screenshot / deploy |
+
+---
+
+## Manual test nhanh
+
+### Luồng khách hàng
+
+1. Mở `/` — thấy **4 sách** seed (Fiction, Science, Technology)
+2. **Thêm vào giỏ** → `/Cart`
+3. Đăng ký hoặc login → `/Order/Checkout` → **Place Order**
+4. Kiểm tra `/Order/Success/{id}` và DB: `Orders`, `OrderDetails`, `Books.Stock` giảm
+
+### Luồng admin
+
+1. Login `admin@bookstore.com` / `Admin@123` → vào `/Admin/Home`
+2. CRUD Category, Book (thử upload ảnh)
+3. `/Admin/Books` — search + filter
+4. `/Admin/Order` — đổi status sang `Completed` → F5 Dashboard → doanh thu tăng
+
+### Phân quyền
+
+- User thường vào `/Admin/Book` → `/Account/AccessDenied`
+- Navbar chỉ hiện link **Admin** khi `User.IsInRole("Admin")`
+
+---
+
+## Validation (Admin)
+
+Data Annotations + jQuery Unobtrusive Validation trên form Create/Edit **Category** và **Book** (`BookFormVM`).
+
+| Model | Quy tắc chính |
+|-------|----------------|
+| `Category` | Name: Required, StringLength(2–100) |
+| `Book` / `BookFormVM` | Title, Author: Required; Price > 0; Stock ≥ 0; CategoryId: Range(1, int.MaxValue) |
+
+`CategoryId` dùng `[Range(1, int.MaxValue)]` thay vì `[Required]` vì `int` mặc định = `0`.
+
+---
+
+## Ghi chú kỹ thuật
+
+- Không query trong View; filter/search dùng `IQueryable` trên EF (`AsNoTracking`, `Include` khi cần)
+- Checkout yêu cầu `[Authorize]` trên `OrderController`
+- `PlaceOrder` dùng database transaction khi trừ stock và lưu order
+- Upload ảnh: `IWebHostEnvironment` inject vào `BookService`, lưu tại `wwwroot/images/books`
+- Catalog client (`GetCatalogAsync`) chỉ hiện sách `Stock > 0`
+- Runtime seed: idempotent, không dùng `HasData()`; Category lưu trước Book (FK); chỉ Development
 
 ---
 
@@ -147,3 +338,4 @@ Mở trình duyệt theo URL trong console (thường `https://localhost:7xxx`).
 - [ASP.NET Core MVC](https://learn.microsoft.com/aspnet/core/mvc/overview)
 - [EF Core](https://learn.microsoft.com/ef/core/)
 - [ASP.NET Core Identity](https://learn.microsoft.com/aspnet/core/security/authentication/identity)
+- [Authorization (Roles)](https://learn.microsoft.com/aspnet/core/security/authorization/roles)

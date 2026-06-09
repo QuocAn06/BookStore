@@ -1,26 +1,23 @@
-﻿using BookStore.Data;
-using BookStore.Models;
+﻿using BookStore.Models;
+using BookStore.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace BookStore.Areas.Admin.Controllers
 {
-    [Area("Admin")]
-    public class CategoryController: Controller
+    public class CategoryController: AdminControllerBase
     {
-        private readonly ApplicationDbContext _context;
-        public CategoryController(ApplicationDbContext context)
+        private readonly ICategoryService _categoryService;
+
+        public CategoryController(ICategoryService categoryService)
         {
-            _context = context;
+            _categoryService = categoryService;
         }
 
         // GET: Admin/Category
         public async Task<IActionResult> Index()
         {
-            var categories = await _context.Categories
-                .OrderBy(c => c.Id)
-                .ToListAsync();
+            var categories = await _categoryService.GetAllAsync();
 
             return View(categories);
         }
@@ -41,8 +38,7 @@ namespace BookStore.Areas.Admin.Controllers
                 return View(category);
             }
 
-            _context.Categories.Add(category);
-            await _context.SaveChangesAsync();
+            await _categoryService.CreateAsync(category);
 
             TempData["success"] = "Category created successfully.";
             return RedirectToAction(nameof(Index));
@@ -53,7 +49,7 @@ namespace BookStore.Areas.Admin.Controllers
         {
             if (id == null) return NotFound();
 
-            var category = await _context.Categories.FindAsync(id);
+            var category = await _categoryService.GetByIdAsync(id.Value);
             if (category == null) return NotFound();
 
             return View(category);
@@ -73,13 +69,12 @@ namespace BookStore.Areas.Admin.Controllers
 
             try
             {
-                _context.Categories.Update(category);
-                await _context.SaveChangesAsync();
+                await _categoryService.UpdateAsync(category);
             }
             catch (DbUpdateConcurrencyException)
             {
-                bool exists = await _context.Categories.AnyAsync(c => c.Id == category.Id);
-                if (!exists) return NotFound();
+                if (!await _categoryService.ExistsAsync(category.Id))
+                    return NotFound();
 
                 throw;
             }
@@ -93,9 +88,7 @@ namespace BookStore.Areas.Admin.Controllers
         {
             if (id == null) return NotFound();
 
-            var category = await _context.Categories
-                .FirstOrDefaultAsync(c => c.Id == id);
-
+            var category = await _categoryService.GetByIdAsync(id.Value);
             if (category == null) return NotFound();
 
             return View(category);
@@ -106,10 +99,9 @@ namespace BookStore.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var category = await _context.Categories.FindAsync(id);
-            if (category == null) return NotFound();
-            _context.Categories.Remove(category);
-            await _context.SaveChangesAsync();
+            var deleted = await _categoryService.DeleteAsync(id);
+            if (!deleted) return NotFound();
+
             TempData["success"] = "Category deleted successfully.";
             return RedirectToAction(nameof(Index));
         }
