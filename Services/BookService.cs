@@ -1,6 +1,7 @@
 ﻿using BookStore.Data;
 using BookStore.Models;
 using BookStore.Models.ViewModels;
+using BookStore.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
@@ -199,6 +200,8 @@ namespace BookStore.Services
 
         private async Task<string> SaveImageAsync(IFormFile imageFile)
         {
+            ImageUploadValidator.EnsureValid(imageFile);
+
             var uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "images", "books");
             Directory.CreateDirectory(uploadsFolder);
 

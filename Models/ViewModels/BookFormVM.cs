@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
+using BookStore.Validation;
+using Microsoft.AspNetCore.Http;
 
 namespace BookStore.Models.ViewModels
 {
@@ -31,6 +33,7 @@ namespace BookStore.Models.ViewModels
 
         public string? ExistingImageUrl { get; set; }
 
+        [AllowedImage]
         [Display(Name = "Book Image")]
         public IFormFile? ImageFile { get; set; }
 
