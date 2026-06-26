@@ -173,17 +173,17 @@ namespace BookStore.Services
         {
             if (page < 1) page = 1;
 
-            var totalCount = await _context.Books
+            var catalogQuery = _context.Books
                 .AsNoTracking()
-                .CountAsync();
+                .Where(b => b.Stock > 0);
+
+            var totalCount = await catalogQuery.CountAsync();
 
             var totalPages = pageSize <= 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
             if (totalPages > 0 && page > totalPages) page = totalPages;
 
-            var books = await _context.Books
-                .AsNoTracking()
+            var books = await catalogQuery
                 .Include(b => b.Category)
-                .Where(b => b.Stock > 0)
                 .OrderByDescending(b => b.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
