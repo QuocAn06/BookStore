@@ -37,20 +37,29 @@ namespace BookStore.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<DeleteResult> DeleteAsync(int id)
         {
             var category = await _context.Categories.FindAsync(id);
             if (category is null)
-                return false;
+                return DeleteResult.NotFoundResult();
+
+            var hasBooks = await _context.Books.AnyAsync(b => b.CategoryId == id);
+            if (hasBooks)
+                return DeleteResult.Fail("Cannot delete a category that contains books.");
 
             _context.Categories.Remove(category);
             await _context.SaveChangesAsync();
-            return true;
+            return DeleteResult.Ok();
         }
 
         public async Task<bool> ExistsAsync(int id)
         {
             return await _context.Categories.AnyAsync(c => c.Id == id);
+        }
+
+        public async Task<int> GetBookCountAsync(int categoryId)
+        {
+            return await _context.Books.CountAsync(b => b.CategoryId == categoryId);
         }
     }
 }
