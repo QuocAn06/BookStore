@@ -87,20 +87,32 @@ namespace BookStore.Services
             return true;
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<DeleteResult> DeleteAsync(int id)
         {
             var book = await _context.Books.FindAsync(id);
             if (book is null)
-                return false;
+                return DeleteResult.NotFoundResult();
 
-            if (!string.IsNullOrWhiteSpace(book.ImageUrl))
-            {
-                DeleteImageFile(book.ImageUrl);
-            }
+            var isReferenced = await _context.OrderDetails.AnyAsync(od => od.BookId == id);
+            if (isReferenced)
+                return DeleteResult.Fail("Cannot delete a book that has been ordered.");
+
+            var imageUrl = book.ImageUrl;
 
             _context.Books.Remove(book);
             await _context.SaveChangesAsync();
-            return true;
+
+            if (!string.IsNullOrWhiteSpace(imageUrl))
+            {
+                DeleteImageFile(imageUrl);
+            }
+
+            return DeleteResult.Ok();
+        }
+
+        public async Task<bool> IsReferencedByOrdersAsync(int bookId)
+        {
+            return await _context.OrderDetails.AnyAsync(od => od.BookId == bookId);
         }
 
         public async Task<AdminBooksIndexVM> SearchAsync(string? title, int? categoryId)

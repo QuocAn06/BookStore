@@ -1,4 +1,5 @@
 ﻿using BookStore.Models;
+using BookStore.Models.ViewModels;
 using BookStore.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -91,7 +92,17 @@ namespace BookStore.Areas.Admin.Controllers
             var category = await _categoryService.GetByIdAsync(id.Value);
             if (category == null) return NotFound();
 
-            return View(category);
+            var bookCount = await _categoryService.GetBookCountAsync(id.Value);
+
+            var vm = new CategoryDeleteVM
+            {
+                Id = category.Id,
+                Name = category.Name,
+                Description = category.Description,
+                BookCount = bookCount
+            };
+
+            return View(vm);
         }
 
         // POST: Admin/Category/Delete/5
@@ -99,8 +110,17 @@ namespace BookStore.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var deleted = await _categoryService.DeleteAsync(id);
-            if (!deleted) return NotFound();
+            var result = await _categoryService.DeleteAsync(id);
+
+            if (result.NotFound)
+                return NotFound();
+
+            if (!result.Success)
+            {
+                TempData["error"] = result.Errors.FirstOrDefault()
+                    ?? "Cannot delete this category.";
+                return RedirectToAction(nameof(Index));
+            }
 
             TempData["success"] = "Category deleted successfully.";
             return RedirectToAction(nameof(Index));
