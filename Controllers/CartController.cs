@@ -3,14 +3,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace BookStore.Controllers
 {
-    public class CartController: Controller
+    public class CartController : Controller
     {
         private readonly ICartSessionService _cart;
-        private readonly IBookService _bookService;
-        public CartController(ICartSessionService cart, IBookService bookService)
+        private readonly ICartService _cartService;
+
+        public CartController(ICartSessionService cart, ICartService cartService)
         {
             _cart = cart;
-            _bookService = bookService;
+            _cartService = cartService;
         }
 
         [HttpGet]
@@ -24,12 +25,16 @@ namespace BookStore.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(int bookId, int quantity = 1)
         {
-            var book = await _bookService.GetByIdAsync(bookId);
-            if (book is null)
-                return NotFound();
-            if (quantity <= 0)
-                quantity = 1;
-            _cart.AddToCart(book.Id, book.Title, book.Price, quantity);
+            var result = await _cartService.TryAddAsync(bookId, quantity);
+
+            if (!result.Success)
+            {
+                TempData["error"] = result.Errors.FirstOrDefault()
+                    ?? "Không thể thêm sách vào giỏ hàng.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            TempData["success"] = "Đã thêm sách vào giỏ hàng.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -38,14 +43,24 @@ namespace BookStore.Controllers
         public IActionResult Remove(int bookId)
         {
             _cart.Remove(bookId);
+            TempData["success"] = "Đã xóa sách khỏi giỏ hàng.";
             return RedirectToAction(nameof(Index));
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Update(int bookId, int quantity)
+        public async Task<IActionResult> Update(int bookId, int quantity)
         {
-            _cart.UpdateQuantity(bookId, quantity);
+            var result = await _cartService.TryUpdateQuantityAsync(bookId, quantity);
+
+            if (!result.Success)
+            {
+                TempData["error"] = result.Errors.FirstOrDefault()
+                    ?? "Không thể cập nhật số lượng.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            TempData["success"] = "Đã cập nhật giỏ hàng.";
             return RedirectToAction(nameof(Index));
         }
     }
