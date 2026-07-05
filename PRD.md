@@ -68,6 +68,11 @@ Mục tiêu:
 * Thêm sách
 * Cập nhật số lượng
 * Xóa sản phẩm
+* Lưu trữ: **Session** (JSON) — không có bảng `Cart` trong DB
+* **Validate tồn kho** khi thêm / cập nhật số lượng:
+  * Không cho vượt `Book.Stock` (cộng dồn nếu sách đã có trong giỏ)
+  * Hiển thị thông báo lỗi thân thiện (`TempData`) khi vượt stock hoặc hết hàng
+  * Logic nằm trong `CartService`; `CartSessionService` chỉ đọc/ghi session
 
 ---
 
@@ -98,12 +103,14 @@ Mục tiêu:
 
 * Create / Read / Update / Delete
 * Upload ảnh
+* Xóa an toàn: không cho xóa sách đã có trong `OrderDetail`
 
 ---
 
 ### 3.2.3 Quản lý Category
 
 * CRUD category
+* Xóa an toàn: không cho xóa category còn sách
 
 ---
 
@@ -126,7 +133,8 @@ Mục tiêu:
 * Book
 * Order
 * OrderDetail
-* (Optional) Cart, CartItem
+
+**Giỏ hàng (client):** dùng Session (`Cart` / `CartItem` model), không persist trong DB.
 
 ---
 
@@ -174,21 +182,42 @@ Mục tiêu:
 
 ---
 
-## Stock (nếu implement)
+## Stock
 
-* Không cho mua vượt quá tồn kho
+* Không cho mua vượt quá tồn kho — **đã implement**
+* **Lớp 1 — Giỏ hàng:** `CartService` validate trước khi add/update quantity
+  * Add: `existingQty + quantity ≤ Stock`
+  * Update: `quantity ≤ Stock`
+  * Hết hàng (`Stock = 0`): không cho thêm
+* **Lớp 2 — Checkout:** `OrderService` validate lại + trừ stock trong transaction
+  * Bảo vệ khi stock thay đổi sau khi user thêm vào giỏ (race condition)
+* Catalog client chỉ hiển thị sách `Stock > 0`
 
 ---
 
 # 7. 🧪 Validation
 
-* Book:
+## Book (Admin form)
 
-  * Title: required
-  * Price > 0
-* Order:
+* Title: required
+* Price > 0
+* Stock ≥ 0
 
-  * Không được empty cart
+## Cart (server-side)
+
+* Add: tổng số lượng trong giỏ không vượt `Stock`
+* Update: số lượng mới không vượt `Stock`
+* Lỗi hiển thị trên trang giỏ hàng
+
+## Order
+
+* Không được empty cart
+* Validate stock lại lúc checkout
+
+## Admin delete
+
+* Category: không xóa khi còn sách
+* Book: không xóa khi đã có trong đơn hàng
 
 ---
 
@@ -208,13 +237,17 @@ Mục tiêu:
 
 # 9. 📂 Cấu trúc project
 
-```id="h7k2u4"
+```
 /Areas/Admin
 /Controllers (Client)
 /Models
 /Services
+  ├── CartSessionService   # Session persistence
+  ├── CartService          # Cart business rules (stock)
+  ├── BookService, OrderService, ...
 /Data
 /Views
+/Infrastructure           # SessionKeys
 ```
 
 ---
@@ -230,10 +263,32 @@ Mục tiêu:
 
 # 11. 📈 Future Enhancements (bonus)
 
+* Client: trang chi tiết sách (`/Home/Detail/{id}`)
+* Client: search & filter trên storefront (hiện có ở Admin `/Admin/Books`)
+* Customer: lịch sử đơn hàng (`My Orders`)
+* `Order.OrderDate` timestamp
 * Search không dấu
 * Recommendation
 * Logging
 * Caching
+* Unit tests cho Service layer
+* Nâng cấp .NET 8 LTS
+
+---
+
+# 11.1 📋 Trạng thái triển khai (tham chiếu)
+
+| Tính năng | Trạng thái |
+|-----------|------------|
+| Catalog + phân trang (client) | ✅ Done |
+| Giỏ hàng Session | ✅ Done |
+| Validate stock (add/update cart) | ✅ Done |
+| Checkout + trừ stock | ✅ Done |
+| Admin CRUD + Dashboard | ✅ Done |
+| Xóa an toàn Category/Book | ✅ Done |
+| Chi tiết sách (client) | ⏳ Chưa |
+| Search/filter storefront | ⏳ Chưa |
+| My Orders (customer) | ⏳ Chưa |
 
 ---
 
@@ -243,14 +298,16 @@ Project được coi là hoàn thành khi:
 
 * User có thể:
 
-  * Xem sách
-  * Thêm vào cart
+  * Xem sách (catalog, phân trang)
+  * Thêm vào cart (validate stock)
+  * Cập nhật giỏ hàng (validate stock)
   * Đặt hàng
 * Admin có thể:
 
-  * CRUD Book/Category
+  * CRUD Book/Category (xóa an toàn khi có ràng buộc FK)
   * Quản lý Order
 * Có Authentication + Authorization
+* Business logic nằm trong Service layer; controller mỏng
 
 ---
 
@@ -262,3 +319,5 @@ Bạn phải giải thích được:
 * Vì sao có OrderDetail?
 * Vì sao dùng Identity?
 * Flow checkout hoạt động thế nào?
+* Vì sao tách `CartSessionService` và `CartService`?
+* Vì sao validate stock ở cả giỏ hàng **và** checkout?
