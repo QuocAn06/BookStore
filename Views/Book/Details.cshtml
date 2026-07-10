@@ -1,0 +1,97 @@
+﻿@model BookDetailVM
+@{
+    ViewData["Title"] = Model.Book.Title;
+    var inStock = Model.Book.Stock > 0;
+}
+
+<h1 class="mb-4">@Model.Book.Title</h1>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        @if (!string.IsNullOrWhiteSpace(Model.Book.ImageUrl))
+        {
+            <img src="@Model.Book.ImageUrl"
+                 alt="@Model.Book.Title"
+                 class="img-fluid rounded shadow-sm"
+                 style="max-height: 400px; width: 100%; object-fit: cover;" />
+        }
+        else
+        {
+            <div class="border rounded bg-light d-flex align-items-center justify-content-center"
+                 style="height: 300px;">
+                <span class="text-muted">Chưa có ảnh</span>
+            </div>
+        }
+    </div>
+
+    <div class="col-md-8">
+        <dl class="row mb-4">
+            <dt class="col-sm-3">Tác giả</dt>
+            <dd class="col-sm-9">@Model.AuthorName</dd>
+
+            <dt class="col-sm-3">Thể loại</dt>
+            <dd class="col-sm-9">@Model.CategoryName</dd>
+
+            <dt class="col-sm-3">Giá</dt>
+            <dd class="col-sm-9 fw-bold text-primary fs-4">
+                @Model.Book.Price.ToString("N0") ₫
+            </dd>
+
+            <dt class="col-sm-3">Tồn kho</dt>
+            <dd class="col-sm-9">
+                @if (inStock)
+                {
+                    <span class="badge bg-success">Còn @Model.Book.Stock cuốn</span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary">Hết hàng</span>
+                }
+            </dd>
+        </dl>
+
+        @if (inStock)
+        {
+            <form asp-controller="Cart" asp-action="Add" method="post" class="mb-3">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="bookId" value="@Model.Book.Id" />
+                <input type="hidden" name="quantity" value="1" />
+                <button type="submit" class="btn btn-success btn-lg">
+                    Thêm vào giỏ
+                </button>
+            </form>
+        }
+        else
+        {
+            <button type="button" class="btn btn-secondary btn-lg" disabled>
+                Hết hàng
+            </button>
+        }
+
+        <div>
+            <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary">
+                ← Quay lại danh sách
+            </a>
+        </div>
+    </div>
+</div>
+
+@if (Model.RelatedBooksInCategory != null && Model.RelatedBooksInCategory.Any())
+{
+    <hr class="my-4" />
+    <h2 class="h5 mb-3">Sách cùng thể loại</h2>
+    <ul class="list-group">
+        @foreach (var related in Model.RelatedBooksInCategory)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>@related.Title</span>
+                <a asp-controller="Book"
+                   asp-action="Details"
+                   asp-route-id="@related.Id"
+                   class="btn btn-sm btn-outline-primary">
+                    Xem chi tiết
+                </a>
+            </li>
+        }
+    </ul>
+}

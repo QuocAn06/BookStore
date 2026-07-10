@@ -14,19 +14,36 @@
             <div class="card h-100 shadow-sm">
                 @if (!string.IsNullOrEmpty(book.ImageUrl))
                 {
-                    <img src="@book.ImageUrl" class="card-img-top" alt="@book.Title" style="height:200px; object-fit:cover;" />
+                    <a asp-controller="Book" asp-action="Details" asp-route-id="@book.Id">
+                        <img src="@book.ImageUrl" class="card-img-top" alt="@book.Title" style="height:200px; object-fit:cover;" />
+                    </a>
                 }
                 <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">@book.Title</h5>
+                    <h5 class="card-title">
+                        <a asp-controller="Book"
+                           asp-action="Details"
+                           asp-route-id="@book.Id"
+                           class="text-decoration-none text-dark">
+                            @book.Title
+                        </a>
+                    </h5>
                     <p class="text-muted mb-1">@book.Author</p>
                     <p class="small mb-2">@(book.Category?.Name ?? "—")</p>
                     <p class="fw-bold text-primary mb-3">@book.Price.ToString("N0") ₫</p>
-                    <form asp-controller="Cart" asp-action="Add" method="post" class="mt-auto">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="bookId" value="@book.Id" />
-                        <input type="hidden" name="quantity" value="1" />
-                        <button type="submit" class="btn btn-success w-100">Thêm vào giỏ</button>
-                    </form>
+                    <div class="mt-auto d-grid gap-2">
+                        <a asp-controller="Book"
+                           asp-action="Details"
+                           asp-route-id="@book.Id"
+                           class="btn btn-outline-primary">
+                            Xem chi tiết
+                        </a>
+                        <form asp-controller="Cart" asp-action="Add" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="bookId" value="@book.Id" />
+                            <input type="hidden" name="quantity" value="1" />
+                            <button type="submit" class="btn btn-success w-100">Thêm vào giỏ</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
