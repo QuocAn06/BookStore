@@ -16,9 +16,20 @@ public class HomeController : Controller
         _bookService = bookService;
     }
 
-    public async Task<IActionResult> Index(int page = 1)
+    public async Task<IActionResult> Index(
+        int page = 1,
+        string? search = null,
+        int? categoryId = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null)
     {
-        var vm = await _bookService.GetCatalogAsync(page);
+        var vm = await _bookService.GetCatalogAsync(
+            page,
+            search,
+            categoryId,
+            minPrice,
+            maxPrice);
+
         return View(vm);
     }
 

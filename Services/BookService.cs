@@ -181,14 +181,48 @@ namespace BookStore.Services
             };
         }
 
-        public async Task<BookCatalogVM> GetCatalogAsync(int page, int pageSize = 12)
+        public async Task<BookCatalogVM> GetCatalogAsync(
+            int page,
+            string? search = null,
+            int? categoryId = null,
+            decimal? minPrice = null,
+            decimal? maxPrice = null,
+            int pageSize = 12)
         {
             if (page < 1) page = 1;
 
-            var catalogQuery = _context.Books
+            // Chuẩn hóa khoảng giá: nếu min > max thì đổi chỗ
+            if (minPrice.HasValue && maxPrice.HasValue && minPrice > maxPrice)
+            {
+                (minPrice, maxPrice) = (maxPrice, minPrice);
+            }
+
+            IQueryable<Book> catalogQuery = _context.Books
                 .AsNoTracking()
                 .Where(b => b.Stock > 0);
 
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                catalogQuery = catalogQuery.Where(b => b.Title.Contains(term));
+            }
+
+            if (categoryId is int cid && cid > 0)
+            {
+                catalogQuery = catalogQuery.Where(b => b.CategoryId == cid);
+            }
+
+            if (minPrice.HasValue)
+            {
+                catalogQuery = catalogQuery.Where(b => b.Price >= minPrice.Value);
+            }
+
+            if (maxPrice.HasValue)
+            {
+                catalogQuery = catalogQuery.Where(b => b.Price <= maxPrice.Value);
+            }
+
+            // Count SAU filter — TotalPages khớp tập đã lọc
             var totalCount = await catalogQuery.CountAsync();
 
             var totalPages = pageSize <= 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -201,12 +235,36 @@ namespace BookStore.Services
                 .Take(pageSize)
                 .ToListAsync();
 
+            // Dropdown category cho form filter (giống Admin SearchAsync)
+            var categories = await _context.Categories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = c.Name,
+                    Selected = categoryId == c.Id
+                })
+                .ToListAsync();
+
+            categories.Insert(0, new SelectListItem
+            {
+                Value = "",
+                Text = "Tất cả danh mục",
+                Selected = categoryId is null or 0
+            });
+
             return new BookCatalogVM
             {
                 Books = books,
                 CurrentPage = page,
                 PageSize = pageSize,
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                Search = search,
+                CategoryId = categoryId,
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                CategoryOptions = categories
             };
         }
 
