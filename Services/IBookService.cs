@@ -16,6 +16,12 @@ namespace BookStore.Services
         Task<bool> IsReferencedByOrdersAsync(int bookId);
         Task<AdminBooksIndexVM> SearchAsync(string? title, int? categoryId);
         Task<BookDetailVM?> GetDetailVmAsync(int id);
-        Task<BookCatalogVM> GetCatalogAsync(int page, int pageSize = 12);
+        Task<BookCatalogVM> GetCatalogAsync(
+            int page,
+            string? search = null,
+            int? categoryId = null,
+            decimal? minPrice = null,
+            decimal? maxPrice = null,
+            int pageSize = 12);
     }
 }
