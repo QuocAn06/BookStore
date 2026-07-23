@@ -1,0 +1,44 @@
+﻿@model BookStore.Models.ViewModels.OrderDetailVM
+@{
+    ViewData["Title"] = $"Order #{Model.Id}";
+}
+
+<div class="container mt-4">
+    <h2>Order #@Model.Id</h2>
+
+    <dl class="row mt-3">
+        <dt class="col-sm-3">Date</dt>
+        <dd class="col-sm-9">@Model.OrderDate.ToLocalTime().ToString("g")</dd>
+
+        <dt class="col-sm-3">Status</dt>
+        <dd class="col-sm-9"><span class="badge bg-info">@Model.Status</span></dd>
+
+        <dt class="col-sm-3">Total</dt>
+        <dd class="col-sm-9">@Model.TotalAmount.ToString("N0")</dd>
+    </dl>
+
+    <h4 class="mt-4">Line items</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Book</th>
+                <th>Price (snapshot)</th>
+                <th>Qty</th>
+                <th>Line total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var line in Model.Lines)
+            {
+                <tr>
+                    <td>@line.BookTitle</td>
+                    <td>@line.Price.ToString("N0")</td>
+                    <td>@line.Quantity</td>
+                    <td>@line.LineTotal.ToString("N0")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <a asp-controller="Order" asp-action="MyOrders" class="btn btn-secondary mt-3">Back to My Orders</a>
+</div>

@@ -1,0 +1,48 @@
+﻿@model IReadOnlyList<BookStore.Models.ViewModels.OrderListItemVM>
+@{
+    ViewData["Title"] = "My Orders";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-3">My Orders</h2>
+
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th style="width: 80px;">Id</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th style="width: 120px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Any())
+            {
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.Id</td>
+                        <td>@item.OrderDate.ToLocalTime().ToString("g")</td>
+                        <td><span class="badge bg-secondary">@item.Status</span></td>
+                        <td>@item.ItemCount</td>
+                        <td>@item.TotalAmount.ToString("N0")</td>
+                        <td>
+                            <a asp-controller="Order"
+                               asp-action="Detail"
+                               asp-route-id="@item.Id"
+                               class="btn btn-primary btn-sm">Details</a>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="6" class="text-center">You have no orders yet.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
