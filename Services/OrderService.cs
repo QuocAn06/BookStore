@@ -1,5 +1,6 @@
 ﻿using BookStore.Data;
 using BookStore.Models;
+using BookStore.Models.ViewModels;
 using Microsoft.EntityFrameworkCore;
 
 namespace BookStore.Services
@@ -30,6 +31,7 @@ namespace BookStore.Services
             {
                 UserId = userId,
                 Status = OrderStatuses.Pending,
+                OrderDate = DateTime.UtcNow,
                 OrderDetails = new List<OrderDetail>()
             };
 
@@ -85,6 +87,24 @@ namespace BookStore.Services
                 .Include(o => o.OrderDetails)
                 .ThenInclude(d => d.Book)
                 .FirstOrDefaultAsync(o => o.Id == orderId && o.UserId == userId);
+        }
+
+        public async Task<IReadOnlyList<OrderListItemVM>> GetOrdersForUserAsync(string userId)
+        {
+            return await _context.Orders
+                .AsNoTracking()
+                .Where(o => o.UserId == userId)
+                .OrderByDescending(o => o.OrderDate)
+                .ThenByDescending(o => o.Id)
+                .Select(o => new OrderListItemVM
+                {
+                    Id = o.Id,
+                    OrderDate = o.OrderDate,
+                    Status = o.Status,
+                    TotalAmount = o.TotalAmount,
+                    ItemCount = o.OrderDetails.Sum(d => d.Quantity)
+                })
+                .ToListAsync();
         }
 
         public async Task<IReadOnlyList<Order>> GetAllForAdminAsync()
