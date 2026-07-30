@@ -21,6 +21,7 @@
             <tr>
                 <th style="width: 80px;">Id</th>
                 <th>Customer</th>
+                <th>Date</th>
                 <th>Total</th>
                 <th>Status</th>
                 <th style="width: 120px;">Actions</th>
@@ -34,6 +35,7 @@
                     <tr>
                         <td>@item.Id</td>
                         <td>@(item.User?.Email ?? item.UserId)</td>
+                        <td>@item.OrderDate.ToLocalTime().ToString("g")</td>
                         <td>@item.TotalAmount.ToString("N2")</td>
                         <td>
                             <span class="badge bg-secondary">@item.Status</span>
@@ -51,7 +53,7 @@
             else
             {
                 <tr>
-                    <td colspan="5" class="text-center">No orders found.</td>
+                    <td colspan="6" class="text-center">No orders found.</td>
                 </tr>
             }
         </tbody>
