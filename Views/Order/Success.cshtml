@@ -5,6 +5,7 @@
 
 <h1>Thank you!</h1>
 <p>Order #@Model.Id — Status: @Model.Status</p>
+<p><strong>Date:</strong> @Model.OrderDate.ToLocalTime().ToString("g")</p>
 <p><strong>Total:</strong> @Model.TotalAmount.ToString("N0")</p>
 
 <table class="table">

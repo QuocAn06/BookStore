@@ -111,7 +111,8 @@ namespace BookStore.Services
         {
             return await _context.Orders
                 .Include(o => o.User)
-                .OrderByDescending(o => o.Id)
+                .OrderByDescending(o => o.OrderDate)
+                .ThenByDescending(o => o.Id)
                 .ToListAsync();
         }
 
