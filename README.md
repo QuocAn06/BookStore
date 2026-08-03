@@ -36,8 +36,7 @@
 
 - Dashboard: tổng đơn hàng, tổng doanh thu (chỉ đơn `Completed`), danh sách sách phân trang
 - CRUD Category (xóa an toàn — chặn khi category còn sách)
-- CRUD Book + upload ảnh (`wwwroot/images/books`); xóa an toàn — chặn khi sách đã có trong đơn hàng
-- Duyệt sách: search theo title, filter theo category (`/Admin/Books`)
+- Quản lý sách trên một controller Admin `Book`: list + search/filter (title, category), Details, CRUD + upload ảnh (`wwwroot/images/books`); xóa an toàn — chặn khi sách đã có trong đơn hàng
 - Quản lý đơn hàng: list, detail, cập nhật trạng thái
 
 ---
@@ -47,8 +46,8 @@
 ```
 BookStore/
 ├── Areas/Admin/              # Quản trị (yêu cầu role Admin)
-│   ├── Controllers/          # Category, Book, Books, Order, Home
-│   └── Views/
+│   ├── Controllers/          # Category, Book, Order, Home
+│   └── Views/                # Book (Index/Details/CRUD), Category, Order, Home
 ├── Controllers/              # Client: Home, Book, Account, Cart, Order
 ├── Data/                     # ApplicationDbContext, IdentitySeed, CatalogSeed
 ├── Infrastructure/           # SessionKeys
@@ -119,8 +118,8 @@ dotnet run
 | `/Order/Success/{id}` | Xác nhận đơn hàng | Cần đăng nhập |
 | `/Admin/Home` | Dashboard admin | Role **Admin** |
 | `/Admin/Category` | CRUD danh mục | Role **Admin** |
-| `/Admin/Book` | CRUD sách + upload ảnh | Role **Admin** |
-| `/Admin/Books` | Duyệt sách, search/filter | Role **Admin** |
+| `/Admin/Book` | List + search/filter, Details, CRUD sách + upload ảnh | Role **Admin** |
+| `/Admin/Book/Details/{id}` | Chi tiết sách (Admin) | Role **Admin** |
 | `/Admin/Order` | Quản lý đơn hàng | Role **Admin** |
 
 Toàn bộ controller trong `Areas/Admin` kế thừa `AdminControllerBase` với `[Authorize(Roles = Roles.Admin)]`.
@@ -245,7 +244,7 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 | `ICartSessionService` | `CartSessionService` | Đọc/ghi giỏ hàng trong Session (JSON) | `CartController`, `OrderController`, `CartService` |
 | `ICartService` | `CartService` | Validate stock khi add/update giỏ | `CartController` |
 | `ICategoryService` | `CategoryService` | CRUD category + xóa an toàn | Admin `CategoryController` |
-| `IBookService` | `BookService` | CRUD book, catalog (filter + pagination), Admin search, detail VM | Admin `BookController`, `BooksController`, `HomeController`, `BookController`, `CartService` |
+| `IBookService` | `BookService` | CRUD book, catalog (filter + pagination), Admin search, detail VM | Admin `BookController`, client `HomeController` / `BookController`, `CartService` |
 | `IOrderService` | `OrderService` | Checkout, validate stock, quản lý đơn | `OrderController`, Admin `OrderController` |
 | `IDashboardService` | `DashboardService` | Thống kê dashboard | Admin `HomeController` |
 
@@ -329,8 +328,8 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 ### Luồng admin
 
 1. Login `admin@bookstore.com` / `Admin@123` → vào `/Admin/Home`
-2. CRUD Category, Book (thử upload ảnh)
-3. `/Admin/Books` — search + filter
+2. CRUD Category
+3. `/Admin/Book` — search/filter + Details; Create/Edit/Delete (thử upload ảnh)
 4. `/Admin/Order` — đổi status sang `Completed` → F5 Dashboard → doanh thu tăng
 
 ### Phân quyền
@@ -376,6 +375,8 @@ Kết quả trả về `DeleteResult`; controller hiển thị qua `TempData["er
 
 ## Ghi chú kỹ thuật
 
+- **Admin Book:** một `BookController` cho list + search/filter + Details + CRUD (đã gộp, không còn `BooksController` / `/Admin/Books`)
+- Storefront `BookController` (`/Book/Details/{id}`) tách Area — không xung đột với Admin
 - Không query trong View; filter/search dùng `IQueryable` trên EF (`AsNoTracking`, `Include` khi cần)
 - **Tách cart layer:** `CartSessionService` = persistence; `CartService` = business rules (stock)
 - Checkout yêu cầu `[Authorize]` trên `OrderController`

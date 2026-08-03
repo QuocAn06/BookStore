@@ -14,10 +14,19 @@ namespace BookStore.Areas.Admin.Controllers
             _bookService = bookService;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? title, int? categoryId)
         {
-            var books = await _bookService.GetAllWithCategoryAsync();
-            return View(books);
+            var vm = await _bookService.SearchAsync(title, categoryId);
+            return View(vm);
+        }
+
+        public async Task<IActionResult> Details(int id)
+        {
+            var vm = await _bookService.GetDetailVmAsync(id);
+            if (vm is null)
+                return NotFound();
+
+            return View(vm);
         }
 
         public async Task<IActionResult> Create()
