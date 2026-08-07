@@ -9,6 +9,7 @@ namespace BookStore.Services
         void AddToCart(int productId, string name, decimal unitPrice, int quantity);
         void Remove(int productId);
         void UpdateQuantity(int productId, int quantity);
+        void UpdateUnitPrice(int productId, decimal unitPrice);
         void Clear();
     }
 }

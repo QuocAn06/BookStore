@@ -25,23 +25,26 @@ namespace BookStore.Controllers
         }
 
         [HttpGet]
-        public IActionResult Checkout()
+        public async Task<IActionResult> Checkout()
         {
-            var cart = _cart.GetCart();
-            if (cart.Items.Count == 0)
+            var validation = await _orderService.ValidateAndSyncCheckoutAsync();
+
+            if (validation.Cart.Items.Count == 0)
                 return RedirectToAction("Index", "Cart");
 
-            return View(cart);
+            if (!validation.IsValid)
+            {
+                foreach (var error in validation.Errors)
+                    ModelState.AddModelError("", error);
+            }
+
+            return View(validation.Cart);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> PlaceOrder()
         {
-            var cart = _cart.GetCart();
-            if (cart.Items.Count == 0)
-                return RedirectToAction("Index", "Cart");
-
             var userId = _userManager.GetUserId(User);
             if (userId is null)
                 return Challenge();
@@ -52,6 +55,11 @@ namespace BookStore.Controllers
             {
                 foreach (var error in result.Errors)
                     ModelState.AddModelError("", error);
+
+                // Lấy lại cart SAU PlaceOrder — đã sync giá / remove sách mất
+                var cart = _cart.GetCart();
+                if (cart.Items.Count == 0)
+                    return RedirectToAction("Index", "Cart");
 
                 return View("Checkout", cart);
             }

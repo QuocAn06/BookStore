@@ -82,6 +82,16 @@ namespace BookStore.Services
             SaveCart(cart);
         }
 
+        public void UpdateUnitPrice(int productId, decimal unitPrice)
+        {
+            var cart = GetCart();
+            var item = cart.Items.FirstOrDefault(x => x.ProductId == productId);
+            if (item is null) return;
+
+            item.UnitPrice = unitPrice;
+            SaveCart(cart);
+        }
+
         public void Clear()
         {
             Session.Remove(SessionKeys.Cart);
