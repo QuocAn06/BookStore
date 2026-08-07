@@ -14,10 +14,19 @@ namespace BookStore.Areas.Admin.Controllers
             _bookService = bookService;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? title, int? categoryId)
         {
-            var books = await _bookService.GetAllWithCategoryAsync();
-            return View(books);
+            var vm = await _bookService.SearchAsync(title, categoryId);
+            return View(vm);
+        }
+
+        public async Task<IActionResult> Details(int id)
+        {
+            var vm = await _bookService.GetDetailVmAsync(id);
+            if (vm is null)
+                return NotFound();
+
+            return View(vm);
         }
 
         public async Task<IActionResult> Create()
@@ -112,15 +121,36 @@ namespace BookStore.Areas.Admin.Controllers
             var book = await _bookService.GetByIdWithCategoryAsync(id.Value);
             if (book == null) return NotFound();
 
-            return View(book);
+            var isReferenced = await _bookService.IsReferencedByOrdersAsync(id.Value);
+
+            var vm = new BookDeleteVM
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                CategoryName = book.Category?.Name,
+                ImageUrl = book.ImageUrl,
+                IsReferencedByOrders = isReferenced
+            };
+
+            return View(vm);
         }
 
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var deleted = await _bookService.DeleteAsync(id);
-            if (!deleted) return NotFound();
+            var result = await _bookService.DeleteAsync(id);
+
+            if (result.NotFound)
+                return NotFound();
+
+            if (!result.Success)
+            {
+                TempData["error"] = result.Errors.FirstOrDefault()
+                    ?? "Cannot delete this book.";
+                return RedirectToAction(nameof(Index));
+            }
 
             TempData["success"] = "Book deleted successfully.";
             return RedirectToAction(nameof(Index));

@@ -18,6 +18,8 @@ namespace BookStore.Models
         [StringLength(50)]
         public string Status { get; set; } = "Pending";
 
+        public DateTime OrderDate { get; set; }
+
         // Many Orders belong to one ApplicationUser
         public ApplicationUser? User { get; set; }
 

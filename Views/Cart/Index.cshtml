@@ -5,6 +5,16 @@
 
 <h1>Shopping Cart</h1>
 
+@if (TempData["success"] != null)
+{
+    <div class="alert alert-success">@TempData["success"]</div>
+}
+
+@if (TempData["error"] != null)
+{
+    <div class="alert alert-danger">@TempData["error"]</div>
+}
+
 @if (Model.Items.Count == 0)
 {
     <p>Your cart is empty.</p>

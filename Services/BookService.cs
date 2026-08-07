@@ -1,6 +1,7 @@
 ﻿using BookStore.Data;
 using BookStore.Models;
 using BookStore.Models.ViewModels;
+using BookStore.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
@@ -86,20 +87,32 @@ namespace BookStore.Services
             return true;
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<DeleteResult> DeleteAsync(int id)
         {
             var book = await _context.Books.FindAsync(id);
             if (book is null)
-                return false;
+                return DeleteResult.NotFoundResult();
 
-            if (!string.IsNullOrWhiteSpace(book.ImageUrl))
-            {
-                DeleteImageFile(book.ImageUrl);
-            }
+            var isReferenced = await _context.OrderDetails.AnyAsync(od => od.BookId == id);
+            if (isReferenced)
+                return DeleteResult.Fail("Cannot delete a book that has been ordered.");
+
+            var imageUrl = book.ImageUrl;
 
             _context.Books.Remove(book);
             await _context.SaveChangesAsync();
-            return true;
+
+            if (!string.IsNullOrWhiteSpace(imageUrl))
+            {
+                DeleteImageFile(imageUrl);
+            }
+
+            return DeleteResult.Ok();
+        }
+
+        public async Task<bool> IsReferencedByOrdersAsync(int bookId)
+        {
+            return await _context.OrderDetails.AnyAsync(od => od.BookId == bookId);
         }
 
         public async Task<AdminBooksIndexVM> SearchAsync(string? title, int? categoryId)
@@ -168,37 +181,97 @@ namespace BookStore.Services
             };
         }
 
-        public async Task<BookCatalogVM> GetCatalogAsync(int page, int pageSize = 12)
+        public async Task<BookCatalogVM> GetCatalogAsync(
+            int page,
+            string? search = null,
+            int? categoryId = null,
+            decimal? minPrice = null,
+            decimal? maxPrice = null,
+            int pageSize = 12)
         {
             if (page < 1) page = 1;
 
-            var totalCount = await _context.Books
+            // Chuẩn hóa khoảng giá: nếu min > max thì đổi chỗ
+            if (minPrice.HasValue && maxPrice.HasValue && minPrice > maxPrice)
+            {
+                (minPrice, maxPrice) = (maxPrice, minPrice);
+            }
+
+            IQueryable<Book> catalogQuery = _context.Books
                 .AsNoTracking()
-                .CountAsync();
+                .Where(b => b.Stock > 0);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                catalogQuery = catalogQuery.Where(b => b.Title.Contains(term));
+            }
+
+            if (categoryId is int cid && cid > 0)
+            {
+                catalogQuery = catalogQuery.Where(b => b.CategoryId == cid);
+            }
+
+            if (minPrice.HasValue)
+            {
+                catalogQuery = catalogQuery.Where(b => b.Price >= minPrice.Value);
+            }
+
+            if (maxPrice.HasValue)
+            {
+                catalogQuery = catalogQuery.Where(b => b.Price <= maxPrice.Value);
+            }
+
+            // Count SAU filter — TotalPages khớp tập đã lọc
+            var totalCount = await catalogQuery.CountAsync();
 
             var totalPages = pageSize <= 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
             if (totalPages > 0 && page > totalPages) page = totalPages;
 
-            var books = await _context.Books
-                .AsNoTracking()
+            var books = await catalogQuery
                 .Include(b => b.Category)
-                .Where(b => b.Stock > 0)
                 .OrderByDescending(b => b.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
+
+            // Dropdown category cho form filter (giống Admin SearchAsync)
+            var categories = await _context.Categories
+                .AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = c.Name,
+                    Selected = categoryId == c.Id
+                })
+                .ToListAsync();
+
+            categories.Insert(0, new SelectListItem
+            {
+                Value = "",
+                Text = "Tất cả danh mục",
+                Selected = categoryId is null or 0
+            });
 
             return new BookCatalogVM
             {
                 Books = books,
                 CurrentPage = page,
                 PageSize = pageSize,
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                Search = search,
+                CategoryId = categoryId,
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                CategoryOptions = categories
             };
         }
 
         private async Task<string> SaveImageAsync(IFormFile imageFile)
         {
+            ImageUploadValidator.EnsureValid(imageFile);
+
             var uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "images", "books");
             Directory.CreateDirectory(uploadsFolder);
 

@@ -15,7 +15,7 @@
 | ORM | Entity Framework Core 6 (SQL Server) |
 | Authentication | ASP.NET Core Identity (`ApplicationUser`) |
 | Authorization | Role-based (`Admin`) + Area Admin |
-| Giỏ hàng | Session + JSON (`ICartSessionService`) |
+| Giỏ hàng | Session + JSON (`ICartSessionService`) + business rules (`ICartService`) |
 | Kiến trúc | MVC + Service Layer (`/Services`) |
 | UI | Bootstrap 5, Razor Views |
 
@@ -25,17 +25,19 @@
 
 ### Client (người mua)
 
-- Trang chủ: danh sách sách, phân trang, nút **Thêm vào giỏ**
-- Giỏ hàng: thêm / cập nhật số lượng / xóa (lưu Session)
-- Checkout → tạo `Order` + `OrderDetail` (copy giá từ `Book`, tính `TotalAmount`, trừ tồn kho)
+- Trang chủ: danh sách sách còn hàng (`Stock > 0`), phân trang, nút **Thêm vào giỏ**
+- **Search & filter** trên storefront (`/`): tìm theo Title, lọc Category, khoảng giá (`minPrice`/`maxPrice`); kết hợp được; phân trang giữ query string (bookmarkable)
+- Chi tiết sách: `/Book/Details/{id}` (404 nếu không tồn tại; gợi ý sách cùng category)
+- Giỏ hàng: thêm / cập nhật số lượng / xóa (lưu Session); **validate tồn kho** trước khi add/update (thông báo qua `TempData`)
+- Checkout → reload DB, phát hiện lệch **giá / tồn**, sync giỏ nếu cần, chặn đặt hàng khi mismatch → tạo `Order` + `OrderDetail` (snapshot giá, trừ tồn trong transaction)
+- Lịch sử đơn: `/Order/MyOrders`, chi tiết `/Order/Detail/{id}`
 - Đăng ký / đăng nhập / đăng xuất
 
 ### Admin (`/Areas/Admin`)
 
 - Dashboard: tổng đơn hàng, tổng doanh thu (chỉ đơn `Completed`), danh sách sách phân trang
-- CRUD Category
-- CRUD Book + upload ảnh (`wwwroot/images/books`)
-- Duyệt sách: search theo title, filter theo category (`/Admin/Books`)
+- CRUD Category (xóa an toàn — chặn khi category còn sách)
+- Quản lý sách trên một controller Admin `Book`: list + search/filter (title, category), Details, CRUD + upload ảnh (`wwwroot/images/books`); xóa an toàn — chặn khi sách đã có trong đơn hàng
 - Quản lý đơn hàng: list, detail, cập nhật trạng thái
 
 ---
@@ -45,19 +47,20 @@
 ```
 BookStore/
 ├── Areas/Admin/              # Quản trị (yêu cầu role Admin)
-│   ├── Controllers/          # Category, Book, Books, Order, Home
-│   └── Views/
-├── Controllers/              # Client: Home, Account, Cart, Order
+│   ├── Controllers/          # Category, Book, Order, Home
+│   └── Views/                # Book (Index/Details/CRUD), Category, Order, Home
+├── Controllers/              # Client: Home, Book, Account, Cart, Order
 ├── Data/                     # ApplicationDbContext, IdentitySeed, CatalogSeed
 ├── Infrastructure/           # SessionKeys
 ├── Models/                   # Entity, Roles, OrderStatuses, ViewModels
 ├── Services/                 # Business logic layer
-│   ├── ICartSessionService / CartSessionService
+│   ├── ICartSessionService / CartSessionService   # Session persistence (+ UpdateUnitPrice)
+│   ├── ICartService / CartService                 # Cart business rules (stock)
 │   ├── ICategoryService / CategoryService
 │   ├── IBookService / BookService
-│   ├── IOrderService / OrderService
+│   ├── IOrderService / OrderService               # ValidateAndSyncCheckout + PlaceOrder
 │   ├── IDashboardService / DashboardService
-│   └── PlaceOrderResult
+│   └── CartOperationResult, CheckoutValidationResult, PlaceOrderResult, DeleteResult
 ├── Views/                    # Razor views (client)
 └── Migrations/               # EF Core migrations
 ```
@@ -106,17 +109,20 @@ dotnet run
 
 | URL | Mô tả | Ghi chú |
 |-----|--------|---------|
-| `/` | Trang chủ — catalog sách | Public |
+| `/` | Trang chủ — catalog + search/filter + phân trang | Public; query: `search`, `categoryId`, `minPrice`, `maxPrice`, `page` |
+| `/Book/Details/{id}` | Chi tiết sách | Public |
 | `/Account/Register` | Đăng ký | |
 | `/Account/Login` | Đăng nhập | Admin login → redirect `/Admin/Home` |
 | `/Account/AccessDenied` | Không đủ quyền | |
 | `/Cart` | Giỏ hàng | Session |
-| `/Order/Checkout` | Thanh toán | Cần đăng nhập |
+| `/Order/Checkout` | Thanh toán (refresh giá/tồn từ DB) | Cần đăng nhập |
 | `/Order/Success/{id}` | Xác nhận đơn hàng | Cần đăng nhập |
+| `/Order/MyOrders` | Lịch sử đơn của user | Cần đăng nhập |
+| `/Order/Detail/{id}` | Chi tiết đơn (customer) | Cần đăng nhập |
 | `/Admin/Home` | Dashboard admin | Role **Admin** |
 | `/Admin/Category` | CRUD danh mục | Role **Admin** |
-| `/Admin/Book` | CRUD sách + upload ảnh | Role **Admin** |
-| `/Admin/Books` | Duyệt sách, search/filter | Role **Admin** |
+| `/Admin/Book` | List + search/filter, Details, CRUD sách + upload ảnh | Role **Admin** |
+| `/Admin/Book/Details/{id}` | Chi tiết sách (Admin) | Role **Admin** |
 | `/Admin/Order` | Quản lý đơn hàng | Role **Admin** |
 
 Toàn bộ controller trong `Areas/Admin` kế thừa `AdminControllerBase` với `[Authorize(Roles = Roles.Admin)]`.
@@ -201,17 +207,33 @@ Sau đó restart app — seed chèn lại dữ liệu mẫu.
 ## Luồng đặt hàng (Checkout)
 
 ```
-Trang chủ → Thêm vào giỏ → /Cart → /Order/Checkout → PlaceOrder
-    → OrderService: validate stock, transaction, trừ Stock
-    → Clear cart → /Order/Success/{id}
+Trang chủ → Thêm vào giỏ
+    → CartService: validate stock (cộng dồn nếu sách đã có trong giỏ)
+    → CartSessionService: lưu session (snapshot UnitPrice = Book.Price lúc add)
+    → /Cart
+    → GET /Order/Checkout
+         → OrderService.ValidateAndSyncCheckoutAsync
+            (reload Books từ DB, detect thiếu sách / thiếu tồn / lệch giá,
+             sync UnitPrice hoặc Remove item, trả errors)
+         → hiện giỏ đã sync + ValidationSummary nếu có thay đổi
+    → POST PlaceOrder
+         → ValidateAndSyncCheckoutAsync lần nữa
+         → nếu invalid → Fail (không tạo đơn), render Checkout với giỏ đã sync
+         → nếu valid → transaction: snapshot Price, trừ Stock, Clear cart
+    → /Order/Success/{id}
 ```
 
 ### Quy tắc nghiệp vụ
 
 - `OrderDetail.Price` = snapshot giá `Book` tại thời điểm đặt — không đổi khi admin sửa giá sau này
 - `TotalAmount` = tổng `Price × Quantity` của các `OrderDetail`
-- Không cho đặt vượt quá `Stock`
-- Giỏ rỗng → redirect về `/Cart`
+- **Không silent mismatch:** nếu `CartItem.UnitPrice != Book.Price`, app sync giá giỏ theo DB và **chặn** Place Order cho đến khi user xem lại Checkout (Option B: fail + sync)
+- **Stock — phòng thủ nhiều lớp:**
+  - Lớp 1 (giỏ): `CartService` chặn add/update vượt `Stock`; hiển thị lỗi qua `TempData["error"]`
+  - Lớp 2 (Checkout GET + PlaceOrder): `ValidateAndSyncCheckoutAsync` reload DB, báo thiếu tồn / sách không còn
+  - Lớp 3 (trước khi ghi): `PlaceOrderAsync` re-check stock/price (race giữa validate và save) rồi transaction trừ tồn
+- Catalog client chỉ hiện sách `Stock > 0`
+- Giỏ rỗng (hoặc hết item sau khi sync remove) → redirect về `/Cart`
 
 ### Trạng thái đơn hàng
 
@@ -229,18 +251,20 @@ Hằng số: `Models/OrderStatuses.cs`. Admin cập nhật tại `/Admin/Order/D
 
 ## Service Layer
 
-| Interface | Implementation | Dùng bởi |
-|-----------|------------------|----------|
-| `ICartSessionService` | `CartSessionService` | `CartController`, `OrderController` |
-| `ICategoryService` | `CategoryService` | Admin `CategoryController` |
-| `IBookService` | `BookService` | Admin `BookController`, `BooksController`, `CartController`, `HomeController` |
-| `IOrderService` | `OrderService` | `OrderController`, Admin `OrderController` |
-| `IDashboardService` | `DashboardService` | Admin `HomeController` |
+| Interface | Implementation | Trách nhiệm | Dùng bởi |
+|-----------|------------------|-------------|----------|
+| `ICartSessionService` | `CartSessionService` | Đọc/ghi giỏ Session (JSON); `UpdateUnitPrice` khi sync giá checkout | `CartController`, `OrderController`, `CartService`, `OrderService` |
+| `ICartService` | `CartService` | Validate stock khi add/update giỏ | `CartController` |
+| `ICategoryService` | `CategoryService` | CRUD category + xóa an toàn | Admin `CategoryController` |
+| `IBookService` | `BookService` | CRUD book, catalog (filter + pagination), Admin search, detail VM | Admin `BookController`, client `HomeController` / `BookController`, `CartService` |
+| `IOrderService` | `OrderService` | `ValidateAndSyncCheckoutAsync`, PlaceOrder (stock/price + transaction), đơn customer/admin | `OrderController`, Admin `OrderController` |
+| `IDashboardService` | `DashboardService` | Thống kê dashboard | Admin `HomeController` |
 
 Đăng ký DI trong `Program.cs`:
 
 ```csharp
 builder.Services.AddScoped<ICartSessionService, CartSessionService>();
+builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IBookService, BookService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
@@ -275,13 +299,31 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 | Phase 4 — Authorization & Area Admin | Done |
 | Phase 5 — Polish | Done (Dashboard, Validation Admin, Service layer, Seed data) |
 
-### Optional (chưa làm)
+**Phase A (Critical Fix) — một phần:**
+
+| Task | Mô tả | Trạng thái |
+|------|--------|------------|
+| A3 | Pagination catalog khớp filter `Stock > 0` | Done |
+| A4 | Xóa Category/Book an toàn (`DeleteResult`) | Done |
+| A5 | Validate stock khi add/update giỏ (`ICartService`) | Done |
+| A6 | Validate stock + price trước Place Order (reload DB, fail + sync giỏ, refresh GET Checkout) | Done |
+
+**Client (plan Task 10–12):**
+
+| Task | Mô tả | Trạng thái |
+|------|--------|------------|
+| 10 | Book listing + pagination | Done |
+| 11 | Book detail (`/Book/Details/{id}`) | Done |
+| 12 | Search & filter storefront (Title, Category, price range + pagination) | Done |
+
+### Optional / tiếp theo (chưa làm)
 
 | Task | Mô tả |
 |------|--------|
 | 16 | Logging khi tạo order |
-| 18 | Unit test service |
-| — | Client: trang chi tiết sách, search/filter trên storefront |
+| 18 | Unit test service (`ValidateAndSyncCheckoutAsync`, PlaceOrder) |
+| — | `RowVersion` trên `Book` (chống oversell concurrent) |
+| — | Restore stock khi Admin hủy đơn (`Cancelled`) |
 | — | README screenshot / deploy |
 
 ---
@@ -291,15 +333,21 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 ### Luồng khách hàng
 
 1. Mở `/` — thấy **4 sách** seed (Fiction, Science, Technology)
-2. **Thêm vào giỏ** → `/Cart`
-3. Đăng ký hoặc login → `/Order/Checkout` → **Place Order**
-4. Kiểm tra `/Order/Success/{id}` và DB: `Orders`, `OrderDetails`, `Books.Stock` giảm
+2. **Search/filter:** Title + Category + khoảng giá; kiểm tra URL có query string; đổi trang vẫn giữ filter; **Xóa lọc** về `/`
+3. Mở `/Book/Details/{id}` — thông tin đầy đủ + sách cùng category (nếu có)
+4. **Thêm vào giỏ** → `/Cart` (alert xanh nếu thành công)
+5. Thử **add/update vượt stock** → alert đỏ, giỏ không đổi
+6. Đăng ký hoặc login → `/Order/Checkout` → **Place Order**
+7. Kiểm tra `/Order/Success/{id}` và DB: `Orders`, `OrderDetails`, `Books.Stock` giảm
+8. **Lệch giá:** thêm sách vào giỏ → Admin đổi `Price` → mở `/Order/Checkout` → thấy warning + giá mới; Place Order lần sau (không đổi gì) → thành công
+9. **Thiếu tồn lúc checkout:** giảm `Stock` dưới số lượng trong giỏ → Checkout hiện lỗi; Place Order bị chặn
+10. `/Order/MyOrders` và `/Order/Detail/{id}` hiển thị đúng snapshot giá đã đặt
 
 ### Luồng admin
 
 1. Login `admin@bookstore.com` / `Admin@123` → vào `/Admin/Home`
-2. CRUD Category, Book (thử upload ảnh)
-3. `/Admin/Books` — search + filter
+2. CRUD Category
+3. `/Admin/Book` — search/filter + Details; Create/Edit/Delete (thử upload ảnh)
 4. `/Admin/Order` — đổi status sang `Completed` → F5 Dashboard → doanh thu tăng
 
 ### Phân quyền
@@ -309,7 +357,9 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 ---
 
-## Validation (Admin)
+## Validation
+
+### Admin (form)
 
 Data Annotations + jQuery Unobtrusive Validation trên form Create/Edit **Category** và **Book** (`BookFormVM`).
 
@@ -320,15 +370,48 @@ Data Annotations + jQuery Unobtrusive Validation trên form Create/Edit **Catego
 
 `CategoryId` dùng `[Range(1, int.MaxValue)]` thay vì `[Required]` vì `int` mặc định = `0`.
 
+### Giỏ hàng (server-side)
+
+| Thao tác | Service | Quy tắc |
+|----------|---------|---------|
+| Add | `CartService.TryAddAsync` | `existingQty + quantity ≤ Stock`; chặn nếu `Stock = 0` |
+| Update | `CartService.TryUpdateQuantityAsync` | `quantity ≤ Stock`; `quantity ≤ 0` → xóa item |
+
+Lỗi giỏ hàng hiển thị qua `TempData["error"]` trên `/Cart`.
+
+### Checkout (server-side) — stock & price
+
+| Bước | Service | Quy tắc |
+|------|---------|---------|
+| GET Checkout / trước PlaceOrder | `OrderService.ValidateAndSyncCheckoutAsync` | Reload `Books` (`AsNoTracking`); sách mất → `Remove` khỏi giỏ; `Stock < Qty` → error; `UnitPrice != Book.Price` → `UpdateUnitPrice` + error (bắt review) |
+| PlaceOrder | `OrderService.PlaceOrderAsync` | Gọi validate trước; invalid → không tạo đơn; valid → re-check stock/price → transaction trừ `Stock` + lưu Order |
+
+Lỗi checkout hiển thị qua `asp-validation-summary` trên `/Order/Checkout` (giỏ đã sync).
+
+### Admin delete (server-side)
+
+| Entity | Quy tắc |
+|--------|---------|
+| Category | Không xóa nếu còn sách thuộc category |
+| Book | Không xóa nếu sách đã có trong `OrderDetail` |
+
+Kết quả trả về `DeleteResult`; controller hiển thị qua `TempData["error"]`.
+
 ---
 
 ## Ghi chú kỹ thuật
 
+- **Admin Book:** một `BookController` cho list + search/filter + Details + CRUD (đã gộp, không còn `BooksController` / `/Admin/Books`)
+- Storefront `BookController` (`/Book/Details/{id}`) tách Area — không xung đột với Admin
 - Không query trong View; filter/search dùng `IQueryable` trên EF (`AsNoTracking`, `Include` khi cần)
+- **Tách cart layer:** `CartSessionService` = persistence; `CartService` = business rules (stock)
 - Checkout yêu cầu `[Authorize]` trên `OrderController`
+- **Checkout validation dùng chung:** `ValidateAndSyncCheckoutAsync` được gọi từ GET Checkout và từ `PlaceOrderAsync` (tránh lệch logic)
+- Validate đọc DB bằng `AsNoTracking`; PlaceOrder load lại Books **có tracking** để trừ `Stock`
 - `PlaceOrder` dùng database transaction khi trừ stock và lưu order
+- Kết quả: `CheckoutValidationResult` (IsValid + Cart + Errors), `PlaceOrderResult` (Success + OrderId / Errors)
 - Upload ảnh: `IWebHostEnvironment` inject vào `BookService`, lưu tại `wwwroot/images/books`
-- Catalog client (`GetCatalogAsync`) chỉ hiện sách `Stock > 0`
+- Catalog client (`GetCatalogAsync`): `Stock > 0` + optional Title/Category/price range trên `IQueryable` → `CountAsync` → `Skip`/`Take` (không load all vào memory); state filter nằm trong `BookCatalogVM`
 - Runtime seed: idempotent, không dùng `HasData()`; Category lưu trước Book (FK); chỉ Development
 
 ---

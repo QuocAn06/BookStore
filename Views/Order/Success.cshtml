@@ -5,6 +5,7 @@
 
 <h1>Thank you!</h1>
 <p>Order #@Model.Id — Status: @Model.Status</p>
+<p><strong>Date:</strong> @Model.OrderDate.ToLocalTime().ToString("g")</p>
 <p><strong>Total:</strong> @Model.TotalAmount.ToString("N0")</p>
 
 <table class="table">
@@ -29,4 +30,6 @@
     </tbody>
 </table>
 
+<a asp-controller="Order" asp-action="Detail" asp-route-id="@Model.Id" class="btn btn-outline-primary">View order</a>
+<a asp-controller="Order" asp-action="MyOrders" class="btn btn-secondary">My Orders</a>
 <a asp-controller="Home" asp-action="Index" class="btn btn-primary">Continue shopping</a>
